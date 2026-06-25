@@ -119,18 +119,28 @@ section.on{animation:fadeUp .24s ease both}
 .modal{animation:fadeUp .26s cubic-bezier(.2,.8,.2,1) both}
 .rp{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:currentColor;opacity:.22;pointer-events:none;animation:ripple .52s ease-out forwards}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.lock{position:fixed;inset:0;z-index:100;background:var(--bg);display:none;align-items:center;justify-content:center}
+.lock.on{display:flex}
+.lockbox{width:100%;max-width:300px;text-align:center;padding:20px}
+.lockttl{font-size:22px;font-weight:800;margin-bottom:6px}
+.locksub{font-size:13px;color:var(--mut);margin-bottom:24px;min-height:18px}
+.dots{display:flex;gap:15px;justify-content:center;margin-bottom:30px}
+.dots i{width:13px;height:13px;border-radius:50%;border:1.6px solid var(--mut);display:block}
+.dots i.f{background:var(--accent);border-color:var(--accent)}
+.dots.err i{border-color:var(--bad)}
+.dots.err{animation:shake .42s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-9px)}40%,80%{transform:translateX(9px)}}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.pad button{height:62px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:22px;color:var(--ink);cursor:pointer;transition:transform .1s}
+.pad button:active{transform:scale(.93)}
+.pad .empty{visibility:hidden;border:none;background:transparent}
+.lockforgot{margin-top:24px;font-size:12.5px;color:var(--mut);cursor:pointer;text-decoration:underline}
 </style>
 </head>
 <body>
 <header><div class="head-in">
  <div class="h1"><b id="evname">Планер</b><button class="gear" id="gear">⚙</button></div>
- <nav id="nav">
-  <button data-v="obz" class="on">Обзор</button>
-  <button data-v="pro">Застройка</button>
-  <button data-v="uch">Участники</button>
-  <button data-v="ste">Стенды</button>
-  <button data-v="zst">Застройщики</button>
- </nav>
+ <nav id="nav"></nav>
 </div></header>
 <div class="wrap">
  <section id="obz" class="on"></section>
@@ -139,6 +149,18 @@ section.on{animation:fadeUp .24s ease both}
  <section id="ste"></section>
  <section id="zst"></section>
 </div>
+<div id="lock" class="lock"><div class="lockbox">
+ <div class="lockttl">Планер</div>
+ <div class="locksub" id="lockSub">Введите PIN</div>
+ <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
+ <div class="pad" id="pad">
+  <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+  <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+  <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+  <button class="empty"></button><button data-k="0">0</button><button data-k="del">⌫</button>
+ </div>
+ <div class="lockforgot" id="lockForgot">Не помню PIN</div>
+</div></div>
 <div class="overlay" id="ov"><div class="modal" id="modal"></div></div>
 <input type="file" id="file" accept="application/json" style="display:none">
 <input type="file" id="xfile" accept=".xlsx,.xls" style="display:none">
@@ -146,7 +168,7 @@ section.on{animation:fadeUp .24s ease both}
 var TG=(window.Telegram&&window.Telegram.WebApp)?window.Telegram.WebApp:null;
 var CLOUD=!!(TG&&TG.CloudStorage&&TG.isVersionAtLeast&&TG.isVersionAtLeast('6.9'));
 if(TG){try{TG.ready();TG.expand();TG.setHeaderColor&&TG.setHeaderColor('secondary_bg_color');}catch(e){}}
-var SEED={"meta": {"event": ""}, "stands": [{"id": "sTEST", "stand": "", "company": "ТЕСТ", "builder": "", "fio": "", "phone": "", "email": "", "s1": null, "s2": null, "kubok": false, "note": ""}], "pro": [{"id": "pTEST", "name": "ТЕСТ", "status": "Активен", "hall": "", "s": null, "builder": "", "st": [0, 0, 0, 0, 0, 0, 0], "nasha": null, "summa": null, "mail": "", "note": ""}], "uch": [{"id": "uTEST", "name": "ТЕСТ", "status": "Активен", "stand": "", "hall": "", "s": null, "note": "", "st": [0, 0, 0, 0, 0, 0, 0, 0]}]};
+var SEED={"meta": {"event": "", "pin": "yhvnph.4", "tabs": ["obz", "pro", "uch", "ste", "zst"], "kpis": ["uchCount", "soglas", "soglasS", "proCount", "full100"], "dash": ["ring", "kpis", "funnelU", "funnelP", "builders"], "total": null, "proSteps": ["ТЗ", "Отправлено", "Нарисовано", "Посчитано", "Подписано", "Баннеры", "Розетки"], "uchSteps": ["Место", "Подпись", "ЭДО", "ЛК", "Аванс", "100%", "Оклейка", "Бейджи"]}, "stands": [{"id": "sTEST", "stand": "", "company": "ТЕСТ", "builder": "", "fio": "", "phone": "", "email": "", "s1": null, "s2": null, "kubok": false, "note": ""}], "pro": [{"id": "pTEST", "name": "ТЕСТ", "status": "Активен", "hall": "", "s": null, "builder": "", "st": [0, 0, 0, 0, 0, 0, 0], "nasha": null, "summa": null, "mail": "", "note": ""}], "uch": [{"id": "uTEST", "name": "ТЕСТ", "status": "Активен", "stand": "", "hall": "", "s": null, "note": "", "st": [0, 0, 0, 0, 0, 0, 0, 0]}]};
 var SEED_PRO_STEPS=["ТЗ", "Отправлено", "Нарисовано", "Посчитано", "Подписано", "Баннеры", "Розетки"], SEED_UCH_STEPS=["Место", "Подпись", "ЭДО", "ЛК", "Аванс", "100%", "Оклейка", "Бейджи"];
 var PRO_STEPS=SEED_PRO_STEPS.slice(), UCH_STEPS=SEED_UCH_STEPS.slice();
 var BK="mxp";
@@ -172,7 +194,11 @@ function load(cb){
 }
 function shape(st){
  st.meta=st.meta||{event:"Планер 2026"};st.stands=st.stands||[];st.pro=st.pro||[];st.uch=st.uch||[];
- st.meta.dash=st.meta.dash||['ring','kpis','funnelU','funnelP','fire','builders'];
+ st.meta.dash=st.meta.dash||['ring','kpis','funnelU','funnelP','builders'];
+ st.meta.tabs=st.meta.tabs||['obz','pro','uch','ste','zst'];
+ st.meta.kpis=st.meta.kpis||['uchCount','soglas','soglasS','proCount','full100'];
+ if(st.meta.total===undefined)st.meta.total=null;
+ if(st.meta.pin===undefined)st.meta.pin=pinHash('1717');
  st.meta.sort=st.meta.sort||{};
  st.meta.proSteps=st.meta.proSteps||SEED_PRO_STEPS.slice();
  st.meta.uchSteps=st.meta.uchSteps||SEED_UCH_STEPS.slice();
@@ -206,8 +232,8 @@ function haptic(t){try{if(TG&&TG.HapticFeedback)TG.HapticFeedback.impactOccurred
 var NUMK={s:1,nasha:1,summa:1,s1:1,s2:1,cnt:1,area:1,pct:1,mar:1,kubok:1};
 var SORTOPTS={
  pro:[['name','Название'],['status','Статус'],['hall','Холл'],['s','Площадь'],['builder','Застройщик'],['pct','Готовность'],['nasha','Сумма наша'],['summa','Сумма'],['mar','Наценка']],
- uch:[['name','Название'],['status','Статус'],['stand','Стенд'],['hall','Холл'],['s','Площадь'],['pct','Готовность']],
- ste:[['company','Компания'],['stand','Стенд'],['builder','Застройщик'],['fio','Контакт'],['s1','Площадь S1'],['kubok','Кубок']],
+ uch:[['name','Название'],['status','Статус'],['stand','№ Стенда'],['hall','Холл'],['s','Площадь'],['pct','Готовность']],
+ ste:[['company','Компания'],['stand','№ Стенда'],['builder','Застройщик'],['fio','Контакт'],['s1','Площадь S1'],['kubok','Кубок']],
  zst:[['area','Площадь'],['cnt','Компаний'],['name','Название']]
 };
 var DEFSORT={pro:{k:'name',dir:1},uch:{k:'name',dir:1},ste:{k:'company',dir:1},zst:{k:'area',dir:-1}};
@@ -227,9 +253,16 @@ var VF=null,PENDBLD=null;
 function clearFilter(){VF=null;}
 function filterChip(tab){return (VF&&VF.tab===tab)?'<div class="fchip">Фильтр: '+esc(VF.label)+' <span class="fx" data-fx="1">✕</span></div>':'';}
 function applyVF(tab,rows){return (VF&&VF.tab===tab)?rows.filter(VF.fn):rows;}
-function curTab(){var b=document.querySelector('nav button.on');return b?b.dataset.v:'obz';}
+var TABCAT=[['obz','Обзор'],['pro','Застройка'],['uch','Участники'],['ste','Согласования'],['zst','Застройщики']];
+function tabLabel(id){for(var i=0;i<TABCAT.length;i++)if(TABCAT[i][0]===id)return TABCAT[i][1];return id;}
+var CURTAB='obz';
+function enabledTabs(){return (STATE.meta.tabs&&STATE.meta.tabs.length)?STATE.meta.tabs:TABCAT.map(function(t){return t[0];});}
+function renderNav(){var tabs=enabledTabs();if(tabs.indexOf(CURTAB)<0)CURTAB=tabs[0];
+ document.getElementById('nav').innerHTML=tabs.map(function(id){return '<button data-v="'+id+'"'+(id===CURTAB?' class="on"':'')+'>'+esc(tabLabel(id))+'</button>';}).join('');
+ [].forEach.call(document.querySelectorAll('section'),function(s){s.classList.toggle('on',s.id===CURTAB);});}
+function curTab(){return CURTAB;}
 function rerenderTab(tab){if(tab==='pro')renderPro();else if(tab==='uch')renderUch();else if(tab==='ste')renderSte();else if(tab==='zst')renderZst();else renderObz();}
-function switchTab(v){var nav=document.getElementById('nav');[].forEach.call(nav.children,function(x){x.classList.toggle('on',x.dataset.v===v);});[].forEach.call(document.querySelectorAll('section'),function(s){s.classList.toggle('on',s.id===v);});rerenderTab(v);window.scrollTo(0,0);}
+function switchTab(v){if(enabledTabs().indexOf(v)<0)return;CURTAB=v;renderNav();rerenderTab(v);window.scrollTo(0,0);}
 
 function renderPro(){
  var act=sortRows('pro',applyVF('pro',STATE.pro.filter(function(r){return r.status!=="Отказ";})));
@@ -256,7 +289,7 @@ function renderUch(){
  var rows=act.concat(rej);
  var h='<div class="addbar"><span class="muted">'+STATE.uch.length+' участников</span><div style="display:flex;gap:7px"><button class="cfgbtn" data-stepsedit="uch">Этапы</button><button class="add" data-add="uch">+ участник</button></div></div>'+sortBar('uch')+filterChip('uch');
  rows.forEach(function(r){
-  var sub=[(r.stand?'Стенд '+esc(r.stand):''),(r.hall?esc(r.hall)+' '+esc(r.s||'')+' м²':'')].filter(Boolean).join(' · ');
+  var sub=[(r.stand?'№ Стенда '+esc(r.stand):''),(r.hall?esc(r.hall)+' '+esc(r.s||'')+' м²':'')].filter(Boolean).join(' · ');
   if(r.status==='Отказ'){
    h+='<div class="card rej"><div class="r1"><div><span class="nm">'+esc(r.name)+'</span>'+pill(r.status)+'<div class="sub">'+sub+'</div></div><button class="pencil" data-edit="uch" data-id="'+r.id+'">✎</button></div>'+(r.note?'<div class="note">'+esc(r.note)+'</div>':'')+'</div>';return;}
   var p=calc(r.st),cc=col(p);var chips="";for(var i=0;i<UCH_STEPS.length;i++)chips+=chipHtml(r.id,i,UCH_STEPS[i],r.st[i]);
@@ -278,9 +311,11 @@ function renderZst(){var a=sortRows('zst',builders()),max=Math.max.apply(null,a.
 function renderSte(){
  var bset=Array.from(new Set(STATE.stands.map(function(s){return s.builder;}).filter(Boolean))).sort();
  document.getElementById("ste").innerHTML=
-  '<div class="addbar"><span class="muted" id="stcnt"></span><button class="add" data-add="ste">+ стенд</button></div>'+
+  '<div class="addbar"><span class="muted" id="stcnt"></span><button class="add" data-add="ste">+ компания</button></div>'+
+  '<div class="sortbar"><span class="sortlbl">Всего компаний (план)</span><input id="totalc" inputmode="numeric" value="'+(STATE.meta.total!=null?STATE.meta.total:"")+'" style="width:90px;flex:0 0 auto" placeholder="напр. 150"></div>'+
   '<div class="toolbar"><input type="search" id="q" placeholder="Поиск: компания, стенд, контакт…"><select id="bf"><option value="">Все застройщики</option>'+bset.map(function(b){return '<option>'+esc(b)+'</option>';}).join('')+'</select></div>'+sortBar('ste')+'<div id="stb"></div>';
  var bf=document.getElementById("bf");if(PENDBLD){bf.value=PENDBLD;PENDBLD=null;}
+ var tc=document.getElementById("totalc");tc.addEventListener("change",function(){var v=tc.value.replace(/\s/g,"");STATE.meta.total=(v===""?null:parseInt(v,10));saveSoon();});
  function draw(){var q=(document.getElementById("q").value||"").toLowerCase().trim();var bfv=bf.value;
   var rows=STATE.stands.filter(function(s){if(bfv&&s.builder!==bfv)return false;if(!q)return true;
     return (s.company+" "+s.stand+" "+s.fio+" "+s.phone+" "+s.email+" "+s.builder).toLowerCase().indexOf(q)>=0;});
@@ -313,30 +348,42 @@ function renderObz(){
    x+='<div class="barrow clk" data-go="'+tab+'" data-step="'+lb+'"><div class="nm">'+lb+'</div><div class="track"><div class="fill" style="width:'+p+'%;background:'+cc[1]+'"></div></div><div class="pc">'+p+'%</div></div>';});return x+'</div>';}
  var W={};
  W.ring=function(){var ring='<svg width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="39" fill="none" stroke="var(--bg)" stroke-width="9"/><circle cx="45" cy="45" r="39" fill="none" stroke="'+c[0]+'" stroke-width="9" stroke-linecap="round" stroke-dasharray="245" stroke-dashoffset="'+(245*(1-overall/100)).toFixed(1)+'" transform="rotate(-90 45 45)"/><text x="45" y="51" text-anchor="middle" font-size="21" font-weight="800" fill="var(--ink)">'+overall+'%</text></svg>';
-  return '<div class="top clk" data-go="pro"><div style="display:flex;align-items:center;gap:10px"><div>'+ring+'</div><div class="muted" style="font-size:12px">готовность<br>застройки</div></div></div>';};
- W.kpis=function(){return '<div class="kpis">'+kpi("Участники",uchAct.length,"uch")+kpi("Компаний",stands.length,"ste")+kpi("Площадь S1",rub.format(Math.round(area)),"ste")+kpi("В застройке",proAct.length,"pro")+kpi("Готовы 100%",full,"pro")+kpi("Наценка ср.",mar+"%","pro")+'</div>';};
+  return '<div class="top clk" data-go="pro"><div style="display:flex;align-items:center;gap:10px"><div>'+ring+'</div><div class="muted" style="font-size:12px">готовность</div></div></div>';};
+ var KPIDEF={
+  uchCount:['Участники',uchAct.length,'uch'],
+  soglas:['Согласовано',stands.length+(STATE.meta.total!=null&&STATE.meta.total!==''?(' из '+STATE.meta.total):''),'ste'],
+  soglasS:['Согласованная S',rub.format(Math.round(area)),'ste'],
+  proCount:['В застройке',proAct.length,'pro'],
+  full100:['Готовы 100%',full,'pro'],
+  readyPct:['Готовность',overall+'%','pro'],
+  margin:['Наценка ср.',mar+'%','pro'],
+  sumN:['Сумма наша',money(sumN),'pro'],
+  sumS:['Сумма',money(sumS),'pro'],
+  diff:['Разница',money(diff),'pro'],
+  standsCount:['Стендов',stands.length,'ste']
+ };
+ W.kpis=function(){var ids=(STATE.meta.kpis&&STATE.meta.kpis.length)?STATE.meta.kpis:['uchCount','soglas','soglasS','proCount','full100'];
+  var cells=ids.map(function(id){var d=KPIDEF[id];return d?kpi(d[0],d[1],d[2]):'';}).join('');
+  return '<div class="addbar" style="margin:4px 0 8px"><span class="muted" style="font-size:12px">показатели</span><button class="cfgbtn" data-kpicfg="1">✎ Изменить</button></div><div class="kpis">'+cells+'</div>';};
  W.money=function(){return '<div class="block"><h2>Деньги</h2><div class="kpis">'+kpi("Сумма наша",money(sumN))+kpi("Сумма",money(sumS))+kpi("Разница",money(diff))+kpi("Наценка ср.",mar+"%")+'</div></div>';};
- W.funnelU=function(){return funnel("Воронка участников","uch",uchAct,UCH_STEPS,UCH_STEPS);};
+ W.funnelU=function(){return funnel("Участники","uch",uchAct,UCH_STEPS,UCH_STEPS);};
  W.funnelP=function(){return funnel("Этапы застройки","pro",proAct,PRO_STEPS,PRO_STEPS);};
- W.fire=function(){function fr(n,tab,thr){var rows=(tab==='uch'?uchAct:proAct),v=0;rows.forEach(function(r){var p=calc(r.st);if(p!==null&&p<thr)v++;});
-   return '<div class="fire clk" data-go="'+tab+'" data-pct="'+thr+'"><span>'+n+'</span><span class="c'+(v<=0?" ok":"")+'">'+v+'</span></div>';}
-  return '<div class="block"><h2>Что горит</h2><div class="firegrid">'+fr("Участники < 100%","uch",100)+fr("Участники без отметок","uch",1)+fr("Застройка < 100%","pro",100)+fr("Застройка без отметок","pro",1)+'</div></div>';};
  W.builders=function(){var a=builders().slice(0,8),mx=a[0]?a[0].area:1,x='<div class="block"><h2>Топ застройщиков</h2>';
   a.forEach(function(b){var w=Math.round(b.area/mx*100);x+='<div class="barrow clk" data-go="ste" data-bld="'+esc(b.name)+'"><div class="nm" style="width:150px">'+esc(b.name)+'</div><div class="track"><div class="fill" style="width:'+w+'%;background:var(--accent)"></div></div><div class="pc">'+rub.format(b.area)+'</div></div>';});return x+'</div>';};
- var order=(STATE.meta.dash&&STATE.meta.dash.length)?STATE.meta.dash:['ring','kpis','funnelU','funnelP','fire','builders'];
- var h='<div class="addbar"><span class="muted">обзор</span><button class="cfgbtn" data-dashcfg="1">⚙ Настроить</button></div>';
+ var order=(STATE.meta.dash&&STATE.meta.dash.length)?STATE.meta.dash:['ring','kpis','funnelU','funnelP','builders'];
+ var h='<div class="addbar"><span></span><button class="cfgbtn" data-dashcfg="1">⚙ Блоки</button></div>';
  order.forEach(function(id){if(W[id])h+=W[id]();});
  document.getElementById("obz").innerHTML=h;
 }
-function renderAll(){document.getElementById("evname").textContent=STATE.meta.event||"Планер";renderObz();renderPro();renderUch();renderSte();renderZst();}
+function renderAll(){document.getElementById("evname").textContent=STATE.meta.event||"Планер";renderNav();renderObz();renderPro();renderUch();renderSte();renderZst();}
 function renderCurrent(){var v=document.querySelector("nav button.on").dataset.v;
  if(v==="pro")renderPro();else if(v==="uch")renderUch();else if(v==="ste")renderSte();else if(v==="zst")renderZst();renderObz();}
 
 /* ---------- формы ---------- */
 var SCHEMA={
- uch:{title:"участника",arr:"uch",fields:[["name","Название","text"],["status","Статус","sel:Активен,В работе,Выбирают место,Подписан,Отказ"],["stand","Стенд","text"],["hall","Холл","text"],["s","Площадь, м²","num"],["note","Примечание","area"]]},
+ uch:{title:"участника",arr:"uch",fields:[["name","Название","text"],["status","Статус","sel:Активен,В работе,Выбирают место,Подписан,Отказ"],["stand","№ Стенда","text"],["hall","Холл","text"],["s","Площадь, м²","num"],["note","Примечание","area"]]},
  pro:{title:"стенд",arr:"pro",fields:[["name","Название","text"],["status","Статус","sel:Активен,Отказ"],["hall","Холл","text"],["s","Площадь, м²","num"],["builder","Застройщик","text"],["nasha","Сумма наша, ₽","num"],["summa","Сумма, ₽","num"],["mail","Почта","text"],["note","Примечание","area"]]},
- ste:{title:"стенд",arr:"stands",fields:[["stand","Стенд","text"],["company","Компания","text"],["builder","Застройщик","text"],["fio","Контакт","text"],["phone","Телефон","text"],["email","Email","text"],["s1","S1, м²","num"],["s2","S2, м²","num"],["kubok","Кубок","bool"],["note","Примечание","area"]]}
+ ste:{title:"стенд",arr:"stands",fields:[["stand","№ Стенда","text"],["company","Компания","text"],["builder","Застройщик","text"],["fio","Контакт","text"],["phone","Телефон","text"],["email","Email","text"],["s1","S1, м²","num"],["s2","S2, м²","num"],["kubok","Кубок","bool"],["note","Примечание","area"]]}
 };
 var ov=document.getElementById("ov"),modal=document.getElementById("modal");
 function openForm(type,id){
@@ -378,7 +425,7 @@ function importExcel(file){
   try{
    var wb=XLSX.read(new Uint8Array(rd.result),{type:'array'});
    function rows(n){var ws=wb.Sheets[n];return ws?XLSX.utils.sheet_to_json(ws,{defval:''}):[];}
-   var st={meta:{event:STATE.meta.event||'',proSteps:PRO_STEPS.slice(),uchSteps:UCH_STEPS.slice()},stands:[],pro:[],uch:[]};
+   var st={meta:{event:STATE.meta.event||'',pin:STATE.meta.pin,total:STATE.meta.total,proSteps:PRO_STEPS.slice(),uchSteps:UCH_STEPS.slice()},stands:[],pro:[],uch:[]};
    rows('Стенды').forEach(function(r,i){if(!String(r['Компания']||'').trim()&&!String(r['Стенд']||'').trim())return;
     st.stands.push({id:'s'+Date.now()+'_'+i,stand:String(r['Стенд']||''),company:String(r['Компания']||''),builder:String(r['Застройщик']||''),fio:String(r['Контакт']||''),phone:String(r['Телефон']||''),email:String(r['Email']||''),s1:xlNum(r['S1']),s2:xlNum(r['S2']),kubok:xlTruthy(r['Кубок'])===1,note:String(r['Примечание']||'')});});
    rows('Застройка').forEach(function(r,i){if(!String(r['Название']||'').trim())return;
@@ -403,9 +450,48 @@ function exportExcel(){
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(U,{header:['Название','Статус','Стенд','Холл','S'].concat(UCH_STEPS).concat(['Примечание'])}),'Участники');
  XLSX.writeFile(wb,'планер-данные.xlsx');
 }
+function pinHash(s){var h=5381;for(var i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36)+'.'+s.length;}
+var lockEl=document.getElementById('lock'),dotsEl=document.getElementById('dots'),lockSub=document.getElementById('lockSub'),pinBuf="";
+function updDots(){var ds=dotsEl.children;for(var i=0;i<4;i++)ds[i].className=(i<pinBuf.length?'f':'');}
+function showLock(){pinBuf="";updDots();lockSub.textContent="Введите PIN";lockEl.classList.add('on');}
+function hideLock(){lockEl.classList.remove('on');}
+function pinPress(d){
+ if(d==='del'){pinBuf=pinBuf.slice(0,-1);updDots();return;}
+ if(pinBuf.length>=4)return;
+ pinBuf+=d;updDots();haptic('light');
+ if(pinBuf.length===4){var v=pinBuf;setTimeout(function(){
+   if(pinHash(v)===STATE.meta.pin){hideLock();haptic('soft');}
+   else{dotsEl.classList.add('err');lockSub.textContent="Неверный PIN";haptic('rigid');
+        setTimeout(function(){dotsEl.classList.remove('err');pinBuf="";updDots();},460);}
+ },110);}
+}
+document.getElementById('pad').addEventListener('click',function(e){var b=e.target.closest('button');if(b&&b.dataset.k)pinPress(b.dataset.k);});
+document.getElementById('lockForgot').onclick=function(){
+ if(confirm('Сбросить PIN можно только вместе со всеми данными в приложении (их можно вернуть импортом). Продолжить?')){
+  STATE=shape(clone(SEED));persist();hideLock();renderAll();}
+};
+function openPinSet(){
+ var has=!!STATE.meta.pin;
+ var html='<h3>'+(has?'Сменить PIN':'Установить PIN')+'</h3>'+
+  '<div class="fld"><label>Новый PIN (4 цифры)</label><input id="pin1" type="password" inputmode="numeric" maxlength="4" autocomplete="off" value=""></div>'+
+  '<div class="fld"><label>Повторите PIN</label><input id="pin2" type="password" inputmode="numeric" maxlength="4" autocomplete="off" value=""></div>'+
+  '<div class="mbtns">'+(has?'<button class="del" id="pinOff" style="width:auto;flex:1">Убрать PIN</button>':'')+'<button class="cancel" id="pinCancel">Отмена</button><button class="save" id="pinSave">Сохранить</button></div>'+
+  '<div class="note" style="margin-top:10px">PIN спрашивается при каждом открытии. Хранится в вашем аккаунте Telegram. Это простая защита от чужих рук, не строгий пароль.</div>';
+ modal.innerHTML=html;ov.classList.add('on');
+ document.getElementById('pinCancel').onclick=closeForm;
+ var off=document.getElementById('pinOff');if(off)off.onclick=function(){STATE.meta.pin='';persist();closeForm();haptic('light');};
+ document.getElementById('pinSave').onclick=function(){
+  var a=document.getElementById('pin1').value,b=document.getElementById('pin2').value;
+  if(!/^\d{4}$/.test(a)){alert('PIN — это 4 цифры');return;}
+  if(a!==b){alert('PIN не совпадает');return;}
+  STATE.meta.pin=pinHash(a);persist();closeForm();haptic('soft');alert('PIN установлен. Теперь он спрашивается при открытии.');
+ };
+}
 function openSettings(){
  var html='<h3>Настройки</h3>'+
   '<div class="fld"><label>Название выставки</label><input id="f_ev" value="'+esc(STATE.meta.event||"")+'"></div>'+
+  '<div class="mbtns" style="margin-bottom:4px"><button class="cancel" id="sPin" style="width:auto;flex:1">'+(STATE.meta.pin?'🔒 PIN: сменить или убрать':'🔒 Установить PIN-код')+'</button></div>'+
+  '<div class="mbtns" style="margin-bottom:4px"><button class="cancel" id="sTabs" style="width:auto;flex:1">Разделы (вкладки)</button></div>'+
   '<div class="mbtns"><button class="cancel" id="xImp">Импорт Excel</button><button class="cancel" id="xExp">Экспорт Excel</button></div>'+
   '<div class="mbtns" style="margin-top:8px"><button class="cancel" id="sExp">Экспорт JSON</button><button class="cancel" id="sImp">Импорт JSON</button></div>'+
   '<div class="mbtns" style="margin-top:8px"><button class="del" id="sReset" style="width:auto;flex:1">Очистить (к ТЕСТ)</button><button class="save" id="sSave">Готово</button></div>'+
@@ -413,6 +499,8 @@ function openSettings(){
  modal.innerHTML=html;ov.classList.add("on");
  document.getElementById("xImp").onclick=function(){document.getElementById("xfile").click();};
  document.getElementById("xExp").onclick=exportExcel;
+ document.getElementById("sPin").onclick=openPinSet;
+ document.getElementById("sTabs").onclick=openTabsConfig;
  document.getElementById("sSave").onclick=function(){STATE.meta.event=document.getElementById("f_ev").value||"Планер";closeForm();saveSoon();renderAll();};
  document.getElementById("sReset").onclick=function(){if(!confirm("Вернуть исходные данные? Все ваши изменения пропадут."))return;STATE=shape(clone(SEED));closeForm();persist();renderAll();};
  document.getElementById("sExp").onclick=function(){var b=new Blob([JSON.stringify(STATE)],{type:"application/json"});var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="планер-данные.json";a.click();};
@@ -448,7 +536,8 @@ function openStepsEditor(type){
  }
  ov.classList.add('on');draw();
 }
-var DASHCAT=[['ring','Кольцо готовности'],['kpis','Показатели'],['money','Деньги'],['funnelU','Воронка участников'],['funnelP','Этапы застройки'],['fire','Что горит'],['builders','Топ застройщиков']];
+var DASHCAT=[['ring','Кольцо готовности'],['kpis','Показатели'],['money','Деньги'],['funnelU','Участники'],['funnelP','Этапы застройки'],['builders','Топ застройщиков']];
+var KPICAT=[['uchCount','Участники'],['soglas','Согласовано'],['soglasS','Согласованная S'],['proCount','В застройке'],['full100','Готовы 100%'],['readyPct','Готовность %'],['margin','Наценка ср.'],['sumN','Сумма наша'],['sumS','Сумма'],['diff','Разница'],['standsCount','Стендов']];
 function openDashConfig(){
  var cur=(STATE.meta.dash&&STATE.meta.dash.length)?STATE.meta.dash.slice():DASHCAT.map(function(d){return d[0];});
  var ids=cur.slice();DASHCAT.forEach(function(d){if(ids.indexOf(d[0])<0)ids.push(d[0]);});
@@ -467,8 +556,41 @@ function openDashConfig(){
  }
  ov.classList.add('on');draw();
 }
-
-/* ---------- события ---------- */
+function openKpiConfig(){
+ var cur=(STATE.meta.kpis&&STATE.meta.kpis.length)?STATE.meta.kpis.slice():['uchCount','soglas','soglasS','proCount','full100'];
+ var ids=cur.slice();KPICAT.forEach(function(d){if(ids.indexOf(d[0])<0)ids.push(d[0]);});
+ var on={};cur.forEach(function(id){on[id]=true;});
+ function lbl(id){for(var i=0;i<KPICAT.length;i++)if(KPICAT[i][0]===id)return KPICAT[i][1];return id;}
+ function draw(){
+  var html='<h3>Показатели</h3><div class="muted" style="font-size:12.5px;margin-bottom:12px">Выберите, какие показатели показывать, и их порядок.</div>';
+  ids.forEach(function(id,i){html+='<div class="dcfg"><button data-up="'+i+'">↑</button><button data-down="'+i+'">↓</button><span class="nm">'+lbl(id)+'</span><input type="checkbox" data-tog="'+id+'"'+(on[id]?' checked':'')+'></div>';});
+  html+='<div class="mbtns" style="margin-top:14px"><button class="cancel" id="kCancel">Отмена</button><button class="save" id="kSave">Сохранить</button></div>';
+  modal.innerHTML=html;
+  [].forEach.call(modal.querySelectorAll('[data-up]'),function(b){b.onclick=function(){var i=+b.dataset.up;if(i>0){var t=ids[i-1];ids[i-1]=ids[i];ids[i]=t;draw();}};});
+  [].forEach.call(modal.querySelectorAll('[data-down]'),function(b){b.onclick=function(){var i=+b.dataset.down;if(i<ids.length-1){var t=ids[i+1];ids[i+1]=ids[i];ids[i]=t;draw();}};});
+  [].forEach.call(modal.querySelectorAll('[data-tog]'),function(c){c.onchange=function(){on[c.dataset.tog]=c.checked;};});
+  document.getElementById('kCancel').onclick=closeForm;
+  document.getElementById('kSave').onclick=function(){STATE.meta.kpis=ids.filter(function(id){return on[id];});closeForm();saveSoon();renderObz();haptic('light');};
+ }
+ ov.classList.add('on');draw();
+}
+function openTabsConfig(){
+ var cur=(STATE.meta.tabs&&STATE.meta.tabs.length)?STATE.meta.tabs.slice():TABCAT.map(function(d){return d[0];});
+ var ids=cur.slice();TABCAT.forEach(function(d){if(ids.indexOf(d[0])<0)ids.push(d[0]);});
+ var on={};cur.forEach(function(id){on[id]=true;});
+ function draw(){
+  var html='<h3>Разделы (вкладки)</h3><div class="muted" style="font-size:12.5px;margin-bottom:12px">Включайте нужные вкладки и меняйте порядок. Хотя бы одна должна остаться.</div>';
+  ids.forEach(function(id,i){html+='<div class="dcfg"><button data-up="'+i+'">↑</button><button data-down="'+i+'">↓</button><span class="nm">'+tabLabel(id)+'</span><input type="checkbox" data-tog="'+id+'"'+(on[id]?' checked':'')+'></div>';});
+  html+='<div class="mbtns" style="margin-top:14px"><button class="cancel" id="tCancel">Отмена</button><button class="save" id="tSave">Сохранить</button></div>';
+  modal.innerHTML=html;
+  [].forEach.call(modal.querySelectorAll('[data-up]'),function(b){b.onclick=function(){var i=+b.dataset.up;if(i>0){var t=ids[i-1];ids[i-1]=ids[i];ids[i]=t;draw();}};});
+  [].forEach.call(modal.querySelectorAll('[data-down]'),function(b){b.onclick=function(){var i=+b.dataset.down;if(i<ids.length-1){var t=ids[i+1];ids[i+1]=ids[i];ids[i]=t;draw();}};});
+  [].forEach.call(modal.querySelectorAll('[data-tog]'),function(c){c.onchange=function(){on[c.dataset.tog]=c.checked;};});
+  document.getElementById('tCancel').onclick=closeForm;
+  document.getElementById('tSave').onclick=function(){var sel=ids.filter(function(id){return on[id];});if(!sel.length){alert('Оставьте хотя бы одну вкладку');return;}STATE.meta.tabs=sel;if(sel.indexOf(CURTAB)<0)CURTAB=sel[0];closeForm();saveSoon();renderAll();haptic('light');};
+ }
+ ov.classList.add('on');draw();
+}
 document.body.addEventListener("click",function(e){
  var chip=e.target.closest(".chip");
  if(chip){var rid=chip.dataset.rid,i=+chip.dataset.i;
@@ -491,6 +613,7 @@ document.body.addEventListener("click",function(e){
  var se=e.target.closest("[data-stepsedit]");if(se){openStepsEditor(se.dataset.stepsedit);return;}
  var sd=e.target.closest(".sortdir");if(sd){var tb=sd.dataset.tab,so=getSort(tb);so.dir=-so.dir;saveSoon();rerenderTab(tb);haptic("light");return;}
  var dc=e.target.closest("[data-dashcfg]");if(dc){openDashConfig();return;}
+ var kc=e.target.closest("[data-kpicfg]");if(kc){openKpiConfig();return;}
  var ed=e.target.closest("[data-edit]");if(ed){openForm(ed.dataset.edit,ed.dataset.id);return;}
  var ad=e.target.closest("[data-add]");if(ad){openForm(ad.dataset.add,null);return;}
 });
@@ -500,7 +623,7 @@ document.body.addEventListener("pointerdown",function(e){var t=e.target.closest(
  if(getComputedStyle(t).position==="static")t.style.position="relative";t.style.overflow="hidden";t.appendChild(r);setTimeout(function(){if(r.parentNode)r.parentNode.removeChild(r);},520);});
 document.getElementById("gear").addEventListener("click",openSettings);
 document.getElementById("nav").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;switchTab(b.dataset.v);haptic("soft");});
-load(function(saved){STATE=shape(saved||clone(SEED));renderAll();});
+load(function(saved){STATE=shape(saved||clone(SEED));renderAll();if(STATE.meta.pin)showLock();});
 </script>
 </body>
 </html>
