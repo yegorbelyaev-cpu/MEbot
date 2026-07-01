@@ -135,6 +135,13 @@ section.on{animation:fadeUp .24s ease both}
 .pad button:active{transform:scale(.93)}
 .pad .empty{visibility:hidden;border:none;background:transparent}
 .lockforgot{margin-top:24px;font-size:12.5px;color:var(--mut);cursor:pointer;text-decoration:underline}
+.rownum{display:inline-block;min-width:20px;text-align:center;font-size:11px;font-weight:800;color:var(--mut);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 5px;margin-right:6px;vertical-align:middle}
+.mtxwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.mtx{border-collapse:collapse;font-size:11px}
+.mtx th{font-weight:600;color:var(--mut);padding:2px 4px;text-align:center;white-space:nowrap}
+.mtx td{padding:2px}
+.mtx .mname{font-size:12px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;padding-right:8px}
+.mcell{display:inline-flex;width:20px;height:20px;border-radius:5px;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700}
 </style>
 </head>
 <body>
@@ -168,7 +175,7 @@ section.on{animation:fadeUp .24s ease both}
 var TG=(window.Telegram&&window.Telegram.WebApp)?window.Telegram.WebApp:null;
 var CLOUD=!!(TG&&TG.CloudStorage&&TG.isVersionAtLeast&&TG.isVersionAtLeast('6.9'));
 if(TG){try{TG.ready();TG.expand();TG.setHeaderColor&&TG.setHeaderColor('secondary_bg_color');}catch(e){}}
-var SEED={"meta": {"event": "", "pin": "yhvnph.4", "tabs": ["obz", "pro", "uch", "ste", "zst"], "kpis": ["uchCount", "soglas", "soglasS", "proCount", "full100"], "dash": ["ring", "kpis", "funnelU", "funnelP", "builders"], "total": null, "proSteps": ["ТЗ", "Отправлено", "Нарисовано", "Посчитано", "Подписано", "Баннеры", "Розетки"], "uchSteps": ["Место", "Подпись", "ЭДО", "ЛК", "Аванс", "100%", "Оклейка", "Бейджи"]}, "stands": [{"id": "sTEST", "stand": "", "company": "ТЕСТ", "builder": "", "fio": "", "phone": "", "email": "", "s1": null, "s2": null, "kubok": false, "note": ""}], "pro": [{"id": "pTEST", "name": "ТЕСТ", "status": "Активен", "hall": "", "s": null, "builder": "", "st": [0, 0, 0, 0, 0, 0, 0], "nasha": null, "summa": null, "mail": "", "note": ""}], "uch": [{"id": "uTEST", "name": "ТЕСТ", "status": "Активен", "stand": "", "hall": "", "s": null, "note": "", "st": [0, 0, 0, 0, 0, 0, 0, 0]}]};
+var SEED={"meta": {"event": "", "pin": "yhvnph.4", "tabs": ["obz", "pro", "uch", "ste", "zst"], "kpis": ["uchCount", "soglas", "soglasS", "proCount", "full100"], "dash": ["ring", "kpis", "econ", "funnelU", "funnelP", "builders"], "total": null, "proSteps": ["ТЗ", "Отправлено", "Нарисовано", "Посчитано", "Подписано", "Баннеры", "Розетки"], "uchSteps": ["Место", "Подпись", "ЭДО", "ЛК", "Аванс", "100%", "Оклейка", "Бейджи"]}, "stands": [{"id": "sTEST", "stand": "", "company": "ТЕСТ", "builder": "", "fio": "", "phone": "", "email": "", "s1": null, "s2": null, "kubok": false, "note": ""}], "pro": [{"id": "pTEST", "name": "ТЕСТ", "status": "Активен", "hall": "", "s": null, "builder": "", "st": [0, 0, 0, 0, 0, 0, 0], "nasha": null, "summa": null, "mail": "", "note": ""}], "uch": [{"id": "uTEST", "name": "ТЕСТ", "status": "Активен", "stand": "", "hall": "", "s": null, "note": "", "st": [0, 0, 0, 0, 0, 0, 0, 0]}]};
 var SEED_PRO_STEPS=["ТЗ", "Отправлено", "Нарисовано", "Посчитано", "Подписано", "Баннеры", "Розетки"], SEED_UCH_STEPS=["Место", "Подпись", "ЭДО", "ЛК", "Аванс", "100%", "Оклейка", "Бейджи"];
 var PRO_STEPS=SEED_PRO_STEPS.slice(), UCH_STEPS=SEED_UCH_STEPS.slice();
 var BK="mxp";
@@ -194,7 +201,7 @@ function load(cb){
 }
 function shape(st){
  st.meta=st.meta||{event:"Планер 2026"};st.stands=st.stands||[];st.pro=st.pro||[];st.uch=st.uch||[];
- st.meta.dash=st.meta.dash||['ring','kpis','funnelU','funnelP','builders'];
+ st.meta.dash=st.meta.dash||['ring','kpis','econ','funnelU','funnelP','builders'];
  st.meta.tabs=st.meta.tabs||['obz','pro','uch','ste','zst'];
  st.meta.kpis=st.meta.kpis||['uchCount','soglas','soglasS','proCount','full100'];
  if(st.meta.total===undefined)st.meta.total=null;
@@ -206,12 +213,17 @@ function shape(st){
  PRO_STEPS=st.meta.proSteps; UCH_STEPS=st.meta.uchSteps;
  st.pro.forEach(function(r){if(!Array.isArray(r.st))r.st=PRO_STEPS.map(function(){return 0});while(r.st.length<PRO_STEPS.length)r.st.push(0);});
  st.uch.forEach(function(r){if(!Array.isArray(r.st))r.st=UCH_STEPS.map(function(){return 0});while(r.st.length<UCH_STEPS.length)r.st.push(0);});
+ [st.pro,st.uch,st.stands].forEach(function(arr){var mx=0;arr.forEach(function(r){if(r.n&&r.n>mx)mx=r.n;});arr.forEach(function(r){if(!r.n)r.n=++mx;});});
+ if(!st.meta._m2){st.meta._m2=1;if(Array.isArray(st.meta.dash)&&st.meta.dash.indexOf('econ')<0){var ix=st.meta.dash.indexOf('kpis');if(ix<0)ix=st.meta.dash.length-1;st.meta.dash.splice(ix+1,0,'econ');}}
  return st;
 }
+function nextN(arr){var m=0;arr.forEach(function(r){if(r.n&&r.n>m)m=r.n;});return m+1;}
+function numBadge(n){return n?'<span class="rownum">№'+n+'</span>':'';}
+function proAvgPriceM2(){var A=0,S=0;STATE.pro.forEach(function(r){if(r.status!=='Отказ'&&r.nasha&&r.summa&&r.s){A+=+r.s;S+=+r.summa;}});return A?S/A:0;}
 
 var rub=new Intl.NumberFormat("ru-RU");
 function money(x){return (x===null||x===undefined||x==="")?"—":rub.format(Math.round(+x))+" ₽";}
-var STCOL={"Активен":"#3fa978","В работе":"#d79a3a","Выбирают место":"#5b7fc7","Подписан":"#2e7d5b","Отказ":"#9a9ba0","Согласовано":"#3fa978","Не согласовано":"#c0563f","Переделывают":"#d79a3a"};
+var STCOL={"Активен":"#3fa978","В работе":"#d79a3a","Выбирают место":"#5b7fc7","Подписан":"#2e7d5b","Готов":"#2f8f5e","Отказ":"#9a9ba0","Согласовано":"#3fa978","Не согласовано":"#c0563f","Переделывают":"#d79a3a"};
 function hexA(h,a){h=String(h).replace('#','');var r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);return 'rgba('+r+','+g+','+b+','+a+')';}
 function pill(st){if(!st)return '';var c=STCOL[st]||"#8a8a8a";return '<span class="pill" style="color:'+c+';background:'+hexA(c,.15)+'">'+esc(st||'')+'</span>';}
 function col(p){if(p===null)return["var(--faint)","var(--bg)"];if(p>=67)return["var(--good)","var(--good)"];if(p>=34)return["var(--warn)","var(--warn)"];if(p>0)return["var(--bad)","var(--bad)"];return["var(--mut)","#cfcfcf"];}
@@ -221,12 +233,18 @@ function uid(p){return p+Date.now().toString(36)+Math.floor(Math.random()*1e4).t
 /* ---------- рендер ---------- */
 function chipHtml(rid,i,label,v){var cls=v===1?"done":(v===2?"na":"");var m=v===1?"✓":(v===2?"—":"");
  return '<span class="chip '+cls+'" data-rid="'+rid+'" data-i="'+i+'"><span class="bx">'+m+'</span>'+label+'</span>';}
-function progress(name,sub,p,rid,type){var c=col(p),pc=p===null?"н/п":p+"%";
- return '<div class="r1"><div><span class="nm">'+esc(name)+'</span> <span class="sub">'+esc(sub)+'</span></div>'+
+function progress(num,name,sub,p,rid,type,pillHtml){var c=col(p),pc=p===null?"н/п":p+"%";
+ return '<div class="r1"><div>'+numBadge(num)+'<span class="nm">'+esc(name)+'</span>'+(pillHtml||'')+' <span class="sub">'+esc(sub)+'</span></div>'+
   '<div style="display:flex;align-items:center;gap:8px"><span class="pc" style="color:'+c[0]+'">'+pc+'</span>'+
   '<button class="pencil" data-edit="'+type+'" data-id="'+rid+'">✎</button></div></div>'+
   '<div class="tr"><div class="fill" style="width:'+(p||0)+'%;background:'+c[1]+'"></div></div>';}
 function esc(s){return (s===null||s===undefined)?"":String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+function autoStatusUch(r){if(r.status==='Отказ')return;var iP=UCH_STEPS.indexOf('Подпись'),iM=UCH_STEPS.indexOf('Место');var cand=null;
+ if(iP>=0&&r.st[iP]===1)cand='Подписан';else if(iM>=0&&r.st[iM]===1)cand='В работе';
+ if(!cand)return;var rank={'Активен':0,'Выбирают место':1,'В работе':1,'Подписан':2};if((rank[cand]||0)>(rank[r.status]||0))r.status=cand;}
+function autoStatusPro(r){if(r.status==='Отказ')return;var p=calc(r.st),iS=PRO_STEPS.indexOf('Подписано');var cand=null;
+ if(p!==null&&p>=100)cand='Готов';else if(iS>=0&&r.st[iS]===1)cand='Подписан';
+ if(!cand)return;var rank={'Активен':0,'Подписан':1,'Готов':2};if((rank[cand]||0)>(rank[r.status]||0))r.status=cand;}
 
 /* ---------- сортировка / фильтр / навигация ---------- */
 function haptic(t){try{if(TG&&TG.HapticFeedback)TG.HapticFeedback.impactOccurred(t||'light');}catch(e){}}
@@ -292,13 +310,14 @@ function renderPro(){
   var p=calc(r.st);var chips="";for(var i=0;i<PRO_STEPS.length;i++)chips+=chipHtml(r.id,i,PRO_STEPS[i],r.st[i]);
   var mar=(r.nasha&&r.summa)?Math.round((r.summa-r.nasha)/r.nasha*100)+"%":"—";
   var hasM=(r.nasha!==null&&r.nasha!==undefined&&r.nasha!=="");
-  h+='<div class="card">'+progress(r.name,r.builder+(r.hall?(" · "+r.hall+" "+(r.s||"")+" м²"):""),p,r.id,"pro")+
+  var perM2=(r.s&&r.nasha&&r.summa)?'<div><span>Цена/м²</span><b>'+money(r.summa/r.s)+'</b></div><div><span>Себест./м²</span><b>'+money(r.nasha/r.s)+'</b></div><div><span>Прибыль/м²</span><b>'+money((r.summa-r.nasha)/r.s)+'</b></div>':'';
+  h+='<div class="card">'+progress(r.n,r.name,r.builder+(r.hall?(" · "+r.hall+" "+(r.s||"")+" м²"):""),p,r.id,"pro",pill(r.status))+
     '<div class="chips">'+chips+'</div>'+
-    (hasM?'<div class="money"><div><span>Наша</span><b>'+money(r.nasha)+'</b></div><div><span>Сумма</span><b>'+money(r.summa)+'</b></div><div><span>Наценка</span><b>'+mar+'</b></div>'+(r.mail?'<div><span>Почта</span><b class="muted">'+esc(r.mail)+'</b></div>':'')+'</div>':'')+
+    (hasM?'<div class="money"><div><span>Наша</span><b>'+money(r.nasha)+'</b></div><div><span>Сумма</span><b>'+money(r.summa)+'</b></div><div><span>Наценка</span><b>'+mar+'</b></div>'+perM2+(r.mail?'<div><span>Почта</span><b class="muted">'+esc(r.mail)+'</b></div>':'')+'</div>':'')+
     (r.note?'<div class="note">'+esc(r.note)+'</div>':'')+'</div>';
  });
  if(rej.length){h+='<div class="block"><h2>Отказы</h2>';
-  rej.forEach(function(r){h+='<div class="card rej"><div class="r1"><div><span class="nm">'+esc(r.name)+'</span> <span class="sub">'+esc(r.builder)+'</span></div><button class="pencil" data-edit="pro" data-id="'+r.id+'">✎</button></div></div>';});
+  rej.forEach(function(r){h+='<div class="card rej"><div class="r1"><div>'+numBadge(r.n)+'<span class="nm">'+esc(r.name)+'</span> <span class="sub">'+esc(r.builder)+'</span></div><button class="pencil" data-edit="pro" data-id="'+r.id+'">✎</button></div></div>';});
   h+='</div>';}
  document.getElementById("pro").innerHTML=h;
 }
@@ -311,9 +330,9 @@ function renderUch(){
  rows.forEach(function(r){
   var sub=[(r.stand?'№ Стенда '+esc(r.stand):''),(r.hall?esc(r.hall)+' '+esc(r.s||'')+' м²':'')].filter(Boolean).join(' · ');
   if(r.status==='Отказ'){
-   h+='<div class="card rej"><div class="r1"><div><span class="nm">'+esc(r.name)+'</span>'+pill(r.status)+'<div class="sub">'+sub+'</div></div><button class="pencil" data-edit="uch" data-id="'+r.id+'">✎</button></div>'+(r.note?'<div class="note">'+esc(r.note)+'</div>':'')+'</div>';return;}
+   h+='<div class="card rej"><div class="r1"><div>'+numBadge(r.n)+'<span class="nm">'+esc(r.name)+'</span>'+pill(r.status)+'<div class="sub">'+sub+'</div></div><button class="pencil" data-edit="uch" data-id="'+r.id+'">✎</button></div>'+(r.note?'<div class="note">'+esc(r.note)+'</div>':'')+'</div>';return;}
   var p=calc(r.st),cc=col(p);var chips="";for(var i=0;i<UCH_STEPS.length;i++)chips+=chipHtml(r.id,i,UCH_STEPS[i],r.st[i]);
-  h+='<div class="card"><div class="r1"><div><span class="nm">'+esc(r.name)+'</span>'+pill(r.status)+'<div class="sub">'+sub+'</div></div>'+
+  h+='<div class="card"><div class="r1"><div>'+numBadge(r.n)+'<span class="nm">'+esc(r.name)+'</span>'+pill(r.status)+'<div class="sub">'+sub+'</div></div>'+
     '<div style="display:flex;align-items:center;gap:8px"><span class="pc" style="color:'+cc[0]+'">'+(p===null?'н/п':p+'%')+'</span><button class="pencil" data-edit="uch" data-id="'+r.id+'">✎</button></div></div>'+
     '<div class="tr"><div class="fill" style="width:'+(p||0)+'%;background:'+cc[1]+'"></div></div>'+
     (UCH_STEPS.length?'<div class="chips">'+chips+'</div>':'')+(r.note?'<div class="note">'+esc(r.note)+'</div>':'')+'</div>';
@@ -341,7 +360,7 @@ function renderSte(){
   rows=sortRows('ste',applyFlt('ste',rows));
   document.getElementById("stcnt").textContent=rows.length+" из "+STATE.stands.length;
   var t="";rows.forEach(function(s){
-   t+='<div class="stcard" data-edit="ste" data-id="'+s.id+'"><div class="co">'+esc(s.company)+' '+pill(s.status)+' '+(s.kubok?'<span class="dot">●</span>':'')+'</div>'+
+   t+='<div class="stcard" data-edit="ste" data-id="'+s.id+'"><div class="co">'+numBadge(s.n)+esc(s.company)+' '+pill(s.status)+' '+(s.kubok?'<span class="dot">●</span>':'')+'</div>'+
      '<div class="meta">'+esc(s.stand)+' · '+esc(s.builder)+(s.s1?(" · "+s.s1+" м²"):"")+(s.date?(" · "+esc(s.date)):"")+'</div>'+
      '<div class="meta">'+esc(s.fio||"")+(s.phone?(" · "+esc(s.phone)):"")+(s.email?(' · <a href="mailto:'+esc(s.email)+'">'+esc(s.email)+'</a>'):"")+'</div>'+
      (s.note?'<div class="meta">'+esc(s.note)+'</div>':'')+'</div>';});
@@ -359,6 +378,11 @@ function renderObz(){
  var overall=tot?Math.round(done/tot*100):0;
  var sumN=0,sumS=0;proAct.forEach(function(r){if(r.nasha){sumN+=+r.nasha;sumS+=+r.summa;}});
  var diff=sumS-sumN,mar=sumN?Math.round(diff/sumN*100):0;var c=col(overall);
+ var proArea=0,priceList=[];proAct.forEach(function(r){if(r.nasha&&r.summa&&r.s){proArea+=+r.s;priceList.push((+r.summa)/(+r.s));}});
+ var avgPriceM2=proArea?sumS/proArea:0,avgCostM2=proArea?sumN/proArea:0,avgProfitM2=proArea?diff/proArea:0;
+ priceList.sort(function(a,b){return a-b;});
+ function med(a){if(!a.length)return 0;var m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2;}
+ var pMin=priceList[0]||0,pMax=priceList[priceList.length-1]||0,pMed=med(priceList);
  function kpi(l,v,go,step){return '<div class="kpi'+(go?' clk':'')+'"'+(go?' data-go="'+go+'"'+(step?' data-step="'+step+'"':''):'')+'><div class="l">'+l+'</div><div class="v">'+v+'</div></div>';}
  function idx(steps,l){return steps.indexOf(l);}
  function cnt(rows,steps,l){var i=idx(steps,l),k=0;rows.forEach(function(r){if(r.st[i]===1)k++;});return k;}
@@ -379,6 +403,10 @@ function renderObz(){
   sumN:['Сумма наша',money(sumN),'pro'],
   sumS:['Сумма',money(sumS),'pro'],
   diff:['Разница',money(diff),'pro'],
+  priceM2:['Цена/м² ср.',money(avgPriceM2),'pro'],
+  costM2:['Себест./м² ср.',money(avgCostM2),'pro'],
+  profitM2:['Прибыль/м² ср.',money(avgProfitM2),'pro'],
+  profitTot:['Прибыль',money(diff),'pro'],
   standsCount:['Стендов',stands.length,'ste']
  };
  W.kpis=function(){var ids=(STATE.meta.kpis&&STATE.meta.kpis.length)?STATE.meta.kpis:['uchCount','soglas','soglasS','proCount','full100'];
@@ -389,7 +417,33 @@ function renderObz(){
  W.funnelP=function(){return funnel("Этапы застройки","pro",proAct,PRO_STEPS,PRO_STEPS);};
  W.builders=function(){var a=builders().slice(0,8),mx=a[0]?a[0].area:1,x='<div class="block"><h2>Топ застройщиков</h2>';
   a.forEach(function(b){var w=Math.round(b.area/mx*100);x+='<div class="barrow clk" data-go="ste" data-bld="'+esc(b.name)+'"><div class="nm" style="width:150px">'+esc(b.name)+'</div><div class="track"><div class="fill" style="width:'+w+'%;background:var(--accent)"></div></div><div class="pc">'+rub.format(b.area)+'</div></div>';});return x+'</div>';};
- var order=(STATE.meta.dash&&STATE.meta.dash.length)?STATE.meta.dash:['ring','kpis','funnelU','funnelP','builders'];
+ W.econ=function(){
+  if(!proArea)return '<div class="block"><h2>Экономика застройки</h2><div class="muted" style="font-size:12.5px">Заполните площадь и суммы в стендах застройки — появятся цена и прибыль за метр.</div></div>';
+  return '<div class="block"><h2>Экономика застройки</h2><div class="kpis">'+
+   kpi('Цена/м² ср.',money(avgPriceM2))+kpi('Себест./м² ср.',money(avgCostM2))+kpi('Прибыль/м² ср.',money(avgProfitM2))+
+   kpi('Прибыль всего',money(diff))+kpi('Наценка ср.',mar+'%')+kpi('Площадь застройки',rub.format(Math.round(proArea))+' м²')+
+   '</div><div class="note" style="margin-top:8px">Цена за м²:&nbsp; мин '+money(pMin)+' · медиана '+money(pMed)+' · макс '+money(pMax)+'</div></div>';};
+ W.byHall=function(){
+  var m={};proAct.forEach(function(r){var hn=(r.hall||'—');if(!m[hn])m[hn]={area:0,summa:0};m[hn].area+=(+r.s||0);if(r.summa)m[hn].summa+=+r.summa;});
+  var a=Object.keys(m).map(function(k){return {hall:k,area:m[k].area,summa:m[k].summa,pm:m[k].area?m[k].summa/m[k].area:0};}).filter(function(x){return x.area>0;});
+  if(!a.length)return '';a.sort(function(x,y){return y.area-x.area;});var mx=a[0].area||1;
+  var x='<div class="block"><h2>По холлам</h2>';
+  a.forEach(function(h){var w=Math.round(h.area/mx*100);x+='<div class="barrow"><div class="nm" style="width:110px">'+esc(h.hall)+'</div><div class="track"><div class="fill" style="width:'+w+'%;background:var(--accent)"></div></div><div class="pc" style="width:auto;text-align:right">'+rub.format(Math.round(h.area))+' м²'+(h.pm?' · '+money(h.pm)+'/м²':'')+'</div></div>';});
+  return x+'</div>';};
+ W.moneyBuilders=function(){
+  var m={};proAct.forEach(function(r){if(!r.builder||!r.summa)return;if(!m[r.builder])m[r.builder]={rev:0};m[r.builder].rev+=+r.summa;});
+  var a=Object.keys(m).map(function(k){return {name:k,rev:m[k].rev};});if(!a.length)return '';
+  a.sort(function(x,y){return y.rev-x.rev;});a=a.slice(0,8);var mx=a[0].rev||1;
+  var x='<div class="block"><h2>Топ по деньгам (застройка)</h2>';
+  a.forEach(function(b){var w=Math.round(b.rev/mx*100);x+='<div class="barrow"><div class="nm" style="width:130px">'+esc(b.name)+'</div><div class="track"><div class="fill" style="width:'+w+'%;background:var(--accent)"></div></div><div class="pc" style="width:auto;text-align:right">'+money(b.rev)+'</div></div>';});
+  return x+'</div>';};
+ W.matrix=function(){
+  var rows=proAct;if(!rows.length||!PRO_STEPS.length)return '';
+  var head='<th></th>'+PRO_STEPS.map(function(s){return '<th title="'+esc(s)+'">'+esc(s.length>4?s.slice(0,4)+'…':s)+'</th>';}).join('');
+  var body=rows.map(function(r){var cells=r.st.map(function(v){var col2=v===1?'#3fa978':(v===2?'#a6a7ac':'#e0664d');var mk=v===1?'✓':(v===2?'—':'');return '<td><span class="mcell" style="background:'+col2+'">'+mk+'</span></td>';}).join('');
+   return '<tr><td class="mname">'+numBadge(r.n)+esc(r.name)+'</td>'+cells+'</tr>';}).join('');
+  return '<div class="block"><h2>Матрица готовности</h2><div class="mtxwrap"><table class="mtx"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';};
+ var order=(STATE.meta.dash&&STATE.meta.dash.length)?STATE.meta.dash:['ring','kpis','econ','funnelU','funnelP','builders'];
  var h='<div class="addbar"><span></span><button class="cfgbtn" data-dashcfg="1">⚙ Блоки</button></div>';
  order.forEach(function(id){if(W[id])h+=W[id]();});
  document.getElementById("obz").innerHTML=h;
@@ -401,7 +455,7 @@ function renderCurrent(){var v=document.querySelector("nav button.on").dataset.v
 /* ---------- формы ---------- */
 var SCHEMA={
  uch:{title:"участника",arr:"uch",fields:[["name","Название","text"],["status","Статус","sel:Активен,В работе,Выбирают место,Подписан,Отказ"],["stand","№ Стенда","text"],["hall","Холл","text"],["s","Площадь, м²","num"],["note","Примечание","area"]]},
- pro:{title:"стенд",arr:"pro",fields:[["name","Название","text"],["status","Статус","sel:Активен,Отказ"],["hall","Холл","text"],["s","Площадь, м²","num"],["builder","Застройщик","text"],["nasha","Сумма наша, ₽","num"],["summa","Сумма, ₽","num"],["mail","Почта","text"],["note","Примечание","area"]]},
+ pro:{title:"стенд",arr:"pro",fields:[["name","Название","text"],["status","Статус","sel:Активен,Подписан,Готов,Отказ"],["hall","Холл","text"],["s","Площадь, м²","num"],["builder","Застройщик","text"],["nasha","Сумма наша, ₽","num"],["summa","Сумма, ₽","num"],["mail","Почта","text"],["note","Примечание","area"]]},
  ste:{title:"стенд",arr:"stands",fields:[["stand","№ Стенда","text"],["company","Компания","text"],["status","Статус","sel:,Согласовано,Не согласовано,Переделывают"],["date","Дата","date"],["builder","Застройщик","text"],["fio","Контакт","text"],["phone","Телефон","text"],["email","Email","text"],["s1","S1, м²","num"],["s2","S2, м²","num"],["kubok","Кубок","bool"],["note","Примечание","area"]]}
 };
 var ov=document.getElementById("ov"),modal=document.getElementById("modal");
@@ -418,6 +472,7 @@ function openForm(type,id){
   else if(t.indexOf("sel:")===0){var opts=t.slice(4).split(",");html+='<select id="f_'+k+'">'+opts.map(function(o){return '<option '+(String(val)===o?"selected":"")+'>'+o+'</option>';}).join('')+'</select>';}
   else html+='<input id="f_'+k+'" value="'+esc(val)+'">';
   html+='</div>';});
+ if(type==='pro'){var apm=proAvgPriceM2();if(apm)html+='<div class="note" style="margin-top:2px">Средняя цена/м² по проектам: <b>'+money(apm)+'</b> — ориентир суммы = площадь × цена/м².</div>';}
  html+='<div class="mbtns">'+(isNew?'':'<button class="del" id="mdel">🗑</button>')+'<button class="cancel" id="mcancel">Отмена</button><button class="save" id="msave">Сохранить</button></div>';
  modal.innerHTML=html;ov.classList.add("on");
  document.getElementById("mcancel").onclick=closeForm;
@@ -427,7 +482,7 @@ function openForm(type,id){
    if(t==="bool")obj[k]=el.checked;
    else if(t==="num"){var v=el.value.replace(/\s/g,"").replace(",",".");obj[k]=(v===""?null:parseFloat(v));}
    else obj[k]=el.value;});
-  if(isNew){if(type!=="ste")obj.st=(type==="pro"?PRO_STEPS:UCH_STEPS).map(function(){return 0;});STATE[sc.arr].push(obj);}
+  if(isNew){if(type!=="ste")obj.st=(type==="pro"?PRO_STEPS:UCH_STEPS).map(function(){return 0;});obj.n=nextN(STATE[sc.arr]);STATE[sc.arr].push(obj);}
   closeForm();saveSoon();renderCurrent();renderAll&&0;
  };
  var del=document.getElementById("mdel");if(del)del.onclick=function(){
@@ -447,11 +502,11 @@ function importExcel(file){
    function rows(n){var ws=wb.Sheets[n];return ws?XLSX.utils.sheet_to_json(ws,{defval:''}):[];}
    var st={meta:{event:STATE.meta.event||'',pin:STATE.meta.pin,total:STATE.meta.total,proSteps:PRO_STEPS.slice(),uchSteps:UCH_STEPS.slice()},stands:[],pro:[],uch:[]};
    rows('Стенды').forEach(function(r,i){if(!String(r['Компания']||'').trim()&&!String(r['Стенд']||'').trim())return;
-    st.stands.push({id:'s'+Date.now()+'_'+i,stand:String(r['Стенд']||''),company:String(r['Компания']||''),status:String(r['Статус']||''),date:String(r['Дата']||''),builder:String(r['Застройщик']||''),fio:String(r['Контакт']||''),phone:String(r['Телефон']||''),email:String(r['Email']||''),s1:xlNum(r['S1']),s2:xlNum(r['S2']),kubok:xlTruthy(r['Кубок'])===1,note:String(r['Примечание']||'')});});
+    st.stands.push({id:'s'+Date.now()+'_'+i,n:xlNum(r['№']),stand:String(r['Стенд']||''),company:String(r['Компания']||''),status:String(r['Статус']||''),date:String(r['Дата']||''),builder:String(r['Застройщик']||''),fio:String(r['Контакт']||''),phone:String(r['Телефон']||''),email:String(r['Email']||''),s1:xlNum(r['S1']),s2:xlNum(r['S2']),kubok:xlTruthy(r['Кубок'])===1,note:String(r['Примечание']||'')});});
    rows('Застройка').forEach(function(r,i){if(!String(r['Название']||'').trim())return;
-    st.pro.push({id:'p'+Date.now()+'_'+i,name:String(r['Название']||''),status:String(r['Статус']||'Активен'),hall:String(r['Холл']||''),s:xlNum(r['S']),builder:String(r['Застройщик']||''),nasha:xlNum(r['Сумма наша']),summa:xlNum(r['Сумма']),mail:String(r['Почта']||''),note:String(r['Примечание']||''),st:PRO_STEPS.map(function(l){return xlTruthy(r[l]);})});});
+    st.pro.push({id:'p'+Date.now()+'_'+i,n:xlNum(r['№']),name:String(r['Название']||''),status:String(r['Статус']||'Активен'),hall:String(r['Холл']||''),s:xlNum(r['S']),builder:String(r['Застройщик']||''),nasha:xlNum(r['Сумма наша']),summa:xlNum(r['Сумма']),mail:String(r['Почта']||''),note:String(r['Примечание']||''),st:PRO_STEPS.map(function(l){return xlTruthy(r[l]);})});});
    rows('Участники').forEach(function(r,i){if(!String(r['Название']||'').trim())return;
-    st.uch.push({id:'u'+Date.now()+'_'+i,name:String(r['Название']||''),status:String(r['Статус']||'Активен'),stand:String(r['Стенд']||''),hall:String(r['Холл']||''),s:xlNum(r['S']),note:String(r['Примечание']||''),st:UCH_STEPS.map(function(l){return xlTruthy(r[l]);})});});
+    st.uch.push({id:'u'+Date.now()+'_'+i,n:xlNum(r['№']),name:String(r['Название']||''),status:String(r['Статус']||'Активен'),stand:String(r['Стенд']||''),hall:String(r['Холл']||''),s:xlNum(r['S']),note:String(r['Примечание']||''),st:UCH_STEPS.map(function(l){return xlTruthy(r[l]);})});});
    STATE=shape(st);persist();closeForm();renderAll();haptic('light');
    alert('Импортировано из Excel:\nстендов '+st.stands.length+', застройка '+st.pro.length+', участники '+st.uch.length);
   }catch(err){alert('Не удалось прочитать Excel: '+err.message);}
@@ -462,12 +517,15 @@ function exportExcel(){
  if(!window.XLSX){alert('Библиотека Excel не загрузилась — нужен интернет');return;}
  var wb=XLSX.utils.book_new();
  function steps(arr,stArr){var o={};arr.forEach(function(l,i){o[l]=(stArr&&stArr[i]===1)?'✓':((stArr&&stArr[i]===2)?'—':'');});return o;}
- var S=STATE.stands.map(function(s){return {'Стенд':s.stand||'','Компания':s.company||'','Статус':s.status||'','Дата':s.date||'','Застройщик':s.builder||'','Контакт':s.fio||'','Телефон':s.phone||'','Email':s.email||'','S1':s.s1==null?'':s.s1,'S2':s.s2==null?'':s.s2,'Кубок':s.kubok?'✓':'','Примечание':s.note||''};});
- XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S,{header:['Стенд','Компания','Статус','Дата','Застройщик','Контакт','Телефон','Email','S1','S2','Кубок','Примечание']}),'Стенды');
- var P=STATE.pro.map(function(p){return Object.assign({'Название':p.name||'','Статус':p.status||'','Холл':p.hall||'','S':p.s==null?'':p.s,'Застройщик':p.builder||''},steps(PRO_STEPS,p.st),{'Сумма наша':p.nasha==null?'':p.nasha,'Сумма':p.summa==null?'':p.summa,'Почта':p.mail||'','Примечание':p.note||''});});
- XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(P,{header:['Название','Статус','Холл','S','Застройщик'].concat(PRO_STEPS).concat(['Сумма наша','Сумма','Почта','Примечание'])}),'Застройка');
- var U=STATE.uch.map(function(u){return Object.assign({'Название':u.name||'','Статус':u.status||'','Стенд':u.stand||'','Холл':u.hall||'','S':u.s==null?'':u.s},steps(UCH_STEPS,u.st),{'Примечание':u.note||''});});
- XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(U,{header:['Название','Статус','Стенд','Холл','S'].concat(UCH_STEPS).concat(['Примечание'])}),'Участники');
+ var S=STATE.stands.map(function(s){return {'№':s.n==null?'':s.n,'Стенд':s.stand||'','Компания':s.company||'','Статус':s.status||'','Дата':s.date||'','Застройщик':s.builder||'','Контакт':s.fio||'','Телефон':s.phone||'','Email':s.email||'','S1':s.s1==null?'':s.s1,'S2':s.s2==null?'':s.s2,'Кубок':s.kubok?'✓':'','Примечание':s.note||''};});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S,{header:['№','Стенд','Компания','Статус','Дата','Застройщик','Контакт','Телефон','Email','S1','S2','Кубок','Примечание']}),'Стенды');
+ var P=STATE.pro.map(function(p){
+  var pm2=(p.s&&p.summa!=null)?Math.round(p.summa/p.s):'',cm2=(p.s&&p.nasha!=null)?Math.round(p.nasha/p.s):'';
+  var prof=(p.summa!=null&&p.nasha!=null)?(p.summa-p.nasha):'',prm2=(p.s&&p.summa!=null&&p.nasha!=null)?Math.round((p.summa-p.nasha)/p.s):'';
+  return Object.assign({'№':p.n==null?'':p.n,'Название':p.name||'','Статус':p.status||'','Холл':p.hall||'','S':p.s==null?'':p.s,'Застройщик':p.builder||''},steps(PRO_STEPS,p.st),{'Сумма наша':p.nasha==null?'':p.nasha,'Сумма':p.summa==null?'':p.summa,'Цена/м²':pm2,'Себест/м²':cm2,'Прибыль':prof,'Прибыль/м²':prm2,'Почта':p.mail||'','Примечание':p.note||''});});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(P,{header:['№','Название','Статус','Холл','S','Застройщик'].concat(PRO_STEPS).concat(['Сумма наша','Сумма','Цена/м²','Себест/м²','Прибыль','Прибыль/м²','Почта','Примечание'])}),'Застройка');
+ var U=STATE.uch.map(function(u){return Object.assign({'№':u.n==null?'':u.n,'Название':u.name||'','Статус':u.status||'','Стенд':u.stand||'','Холл':u.hall||'','S':u.s==null?'':u.s},steps(UCH_STEPS,u.st),{'Примечание':u.note||''});});
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(U,{header:['№','Название','Статус','Стенд','Холл','S'].concat(UCH_STEPS).concat(['Примечание'])}),'Участники');
  XLSX.writeFile(wb,'планер-данные.xlsx');
 }
 function pinHash(s){var h=5381;for(var i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return h.toString(36)+'.'+s.length;}
@@ -486,6 +544,9 @@ function pinPress(d){
  },110);}
 }
 document.getElementById('pad').addEventListener('click',function(e){var b=e.target.closest('button');if(b&&b.dataset.k)pinPress(b.dataset.k);});
+document.addEventListener('keydown',function(e){if(!lockEl.classList.contains('on'))return;
+ if(e.key>='0'&&e.key<='9'){pinPress(e.key);e.preventDefault();}
+ else if(e.key==='Backspace'||e.key==='Delete'){pinPress('del');e.preventDefault();}});
 document.getElementById('lockForgot').onclick=function(){
  if(confirm('Сбросить PIN можно только вместе со всеми данными в приложении (их можно вернуть импортом). Продолжить?')){
   STATE=shape(clone(SEED));persist();hideLock();renderAll();}
@@ -556,8 +617,8 @@ function openStepsEditor(type){
  }
  ov.classList.add('on');draw();
 }
-var DASHCAT=[['ring','Кольцо готовности'],['kpis','Показатели'],['money','Деньги'],['funnelU','Участники'],['funnelP','Этапы застройки'],['builders','Топ застройщиков']];
-var KPICAT=[['uchCount','Участники'],['soglas','Согласовано'],['soglasS','Согласованная S'],['proCount','В застройке'],['full100','Готовы 100%'],['readyPct','Готовность %'],['margin','Наценка ср.'],['sumN','Сумма наша'],['sumS','Сумма'],['diff','Разница'],['standsCount','Стендов']];
+var DASHCAT=[['ring','Кольцо готовности'],['kpis','Показатели'],['econ','Экономика застройки'],['money','Деньги'],['byHall','По холлам'],['moneyBuilders','Топ по деньгам'],['matrix','Матрица готовности'],['funnelU','Участники'],['funnelP','Этапы застройки'],['builders','Топ застройщиков']];
+var KPICAT=[['uchCount','Участники'],['soglas','Согласовано'],['soglasS','Согласованная S'],['proCount','В застройке'],['full100','Готовы 100%'],['readyPct','Готовность %'],['margin','Наценка ср.'],['sumN','Сумма наша'],['sumS','Сумма'],['diff','Разница'],['priceM2','Цена/м² ср.'],['costM2','Себест/м² ср.'],['profitM2','Прибыль/м² ср.'],['profitTot','Прибыль'],['standsCount','Стендов']];
 function openDashConfig(){
  var cur=(STATE.meta.dash&&STATE.meta.dash.length)?STATE.meta.dash.slice():DASHCAT.map(function(d){return d[0];});
  var ids=cur.slice();DASHCAT.forEach(function(d){if(ids.indexOf(d[0])<0)ids.push(d[0]);});
@@ -614,8 +675,13 @@ function openTabsConfig(){
 document.body.addEventListener("click",function(e){
  var chip=e.target.closest(".chip");
  if(chip){var rid=chip.dataset.rid,i=+chip.dataset.i;
-  var rec=STATE.pro.concat(STATE.uch).filter(function(r){return r.id===rid;})[0];
+  var rec=null,isProRec=false,pi,ui;
+  for(pi=0;pi<STATE.pro.length;pi++)if(STATE.pro[pi].id===rid){rec=STATE.pro[pi];isProRec=true;break;}
+  if(!rec)for(ui=0;ui<STATE.uch.length;ui++)if(STATE.uch[ui].id===rid){rec=STATE.uch[ui];break;}
   if(rec){rec.st[i]=(rec.st[i]+1)%3;var v=rec.st[i];
+   var prevSt=rec.status;
+   if(isProRec)autoStatusPro(rec);else autoStatusUch(rec);
+   if(rec.status!==prevSt){saveSoon();haptic("light");rerenderTab(curTab());renderObz();return;}
    chip.className="chip "+(v===1?"done":(v===2?"na":""))+" pop";
    var bx=chip.querySelector(".bx");if(bx)bx.textContent=v===1?"✓":(v===2?"—":"");
    setTimeout(function(){chip.classList.remove("pop");},300);
