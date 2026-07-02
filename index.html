@@ -6,6 +6,8 @@
 <title>Планер выставок</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
 :root{
  --bg:var(--tg-theme-secondary-bg-color,#f3f3f1);
@@ -241,18 +243,49 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 <script>
 /* ================= Планер выставок ================= */
 var TG=(window.Telegram&&window.Telegram.WebApp)?window.Telegram.WebApp:null;
-var CLOUD=!!(TG&&TG.CloudStorage&&TG.isVersionAtLeast&&TG.isVersionAtLeast('6.9'));
 if(TG){try{TG.ready();TG.expand();TG.setHeaderColor&&TG.setHeaderColor('secondary_bg_color');}catch(e){}}
-/* user_id используется только чтобы разные люди на ОДНОМ устройстве/браузере (когда CloudStorage
-   недоступен и всё падает на localStorage) не затирали данные друг друга. CloudStorage сам по себе
-   уже изолирован Telegram по паре (бот, пользователь) — это НЕ инструмент разделения общих данных
-   планера между членами команды: они по-прежнему работают с одним и тем же datasetом внутри
-   CloudStorage их аккаунта. Если нужен реальный shared-датасет на всю команду — см. рекомендации
-   по архитектуре (нужен серверный бэкенд, а не Cloud/localStorage). */
-function getUserId(){try{return (TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user&&TG.initDataUnsafe.user.id)?String(TG.initDataUnsafe.user.id):null;}catch(e){return null;}}
-var UID=getUserId();
-var BK_LEGACY="mxv3";
-var BK=UID?("mxv3_u"+UID):"mxv3_anon";
+
+/* ================= FIREBASE (облачное хранилище, работает на любом устройстве) =================
+   Как подключить (один раз, 5 минут):
+   1) Откройте https://console.firebase.google.com → "Add project" → создайте проект (бесплатно).
+   2) В проекте слева: Build → Firestore Database → Create database → режим "Start in test mode"
+      (регион любой, например eur3).
+   3) Слева вверху ⚙ → Project settings → вкладка "General" → внизу "Your apps" → добавьте
+      веб-приложение (иконка </>), название любое. Firebase покажет объект firebaseConfig —
+      скопируйте его целиком и вставьте вместо FIREBASE_CONFIG ниже.
+   4) В Firestore Database → вкладка "Rules" вставьте и нажмите "Publish":
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /planners/{docId} { allow read, write: if true; }
+          }
+        }
+      ВАЖНО: эти правила означают, что доступ к документу возможен, только если знать его ID
+      (это SHA-256-хэш вашего PIN) — Firestore не даёт "посмотреть список всех документов".
+      Это защита "по неизвестности пути", а НЕ полноценная авторизация: 6-значный PIN даёт
+      1 000 000 комбинаций, что делает случайный перебор нецелесообразным, но не защищает от
+      целенаправленной атаки. Если данные по-настоящему чувствительные — в будущем стоит
+      заменить PIN на вход по email (Firebase Authentication).
+================================================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyBa6KGKoxGbJIAX0EdryKtnpJJlPaw-Ou8",
+  authDomain: "planner-exhibitions.firebaseapp.com",
+  projectId: "planner-exhibitions",
+  storageBucket: "planner-exhibitions.firebasestorage.app",
+  messagingSenderId: "70833861123",
+  appId: "1:70833861123:web:e8ca9f9f16dfd62d52d436"
+};
+var fbDb=null;
+try{
+ if(FIREBASE_CONFIG.apiKey&&FIREBASE_CONFIG.apiKey.indexOf('ВСТАВЬТЕ')===-1){
+  firebase.initializeApp(FIREBASE_CONFIG);fbDb=firebase.firestore();
+ }else{console.warn('Firebase не настроен: заполните FIREBASE_CONFIG в коде.');}
+}catch(e){console.error('Firebase init failed',e);}
+function sha256hex(str){
+ return crypto.subtle.digest('SHA-256',new TextEncoder().encode(str)).then(function(buf){
+  return Array.prototype.map.call(new Uint8Array(buf),function(b){return b.toString(16).padStart(2,'0');}).join('');
+ });
+}
 var STATE=null;
 var THISYEAR=new Date().getFullYear();
 
@@ -299,31 +332,10 @@ function genSeed(){
  };
 }
 
-/* ---------- storage ---------- */
-function chunk(s){var a=[];for(var i=0;i<s.length;i+=3800)a.push(s.slice(i,i+3800));return a;}
-var cloudChunkN=0; // сколько чанков было записано в облако в прошлый раз — нужно, чтобы подчистить "хвост"
-// Пишем в CloudStorage ПОСЛЕДОВАТЕЛЬНО (не параллельно) и с повторными попытками при ошибке:
-// Desktop/Web-клиенты Telegram строже ограничивают частоту одновременных CloudStorage-запросов,
-// чем мобильные, и при параллельной отправке нескольких чанков часть может вернуть разовую
-// ошибку/таймаут (throttling), из-за чего раньше сразу показывался ложный алерт "проверьте соединение".
-function cloudSetItemRetry(key,val,attemptsLeft,cb){
- TG.CloudStorage.setItem(key,val,function(err){
-  if(err){
-   if(attemptsLeft>0){setTimeout(function(){cloudSetItemRetry(key,val,attemptsLeft-1,cb);},350);return;}
-   console.error('CloudStorage write failed (after retries)',key,err);cb(err);return;
-  }
-  cb(null);
- });
-}
-function writeChunksSequential(ch,i,done){
- if(i>=ch.length){done(true);return;}
- cloudSetItemRetry(BK+"_"+i,ch[i],2,function(err){
-  if(err){done(false);return;}
-  writeChunksSequential(ch,i+1,done);
- });
-}
-/* ---------- ручное сохранение (без автосохранения) ---------- */
+/* ---------- ручное сохранение (без автосохранения), Firestore ---------- */
 var DIRTY=false, SAVING=false;
+var PLANNER_DOC_ID=null; // sha256(pin) — задаётся после ввода/создания PIN, см. lock-flow ниже
+function localCacheKey(){return 'plannercache_'+(PLANNER_DOC_ID||'anon');}
 function updateSaveBtn(){
  var b=document.getElementById('saveBtn');if(!b)return;
  b.classList.remove('dirty','err');
@@ -333,66 +345,43 @@ function updateSaveBtn(){
 }
 // Раньше это было автосохранение (таймер 400мс после каждого изменения). Теперь только
 // помечаем, что есть несохранённые изменения, и подсвечиваем кнопку — саму запись в
-// облако/localStorage делает persist(), который вызывается ТОЛЬКО кликом по кнопке "Сохранить"
+// облако делает persist(), который вызывается ТОЛЬКО кликом по кнопке "Сохранить"
 // (плюс подстраховка при закрытии приложения, см. flushSave).
 function saveSoon(){DIRTY=true;updateSaveBtn();}
 function persist(){
- if(SAVING)return;
+ if(SAVING||!PLANNER_DOC_ID)return;
  SAVING=true;updateSaveBtn();
  var s=JSON.stringify(STATE);
+ try{localStorage.setItem(localCacheKey(),s);}catch(e){} // локальный кэш — чтобы приложение открывалось мгновенно и работало офлайн
  function finish(ok){
-  SAVING=false;
-  if(ok){DIRTY=false;}
-  updateSaveBtn();
-  if(!ok){var b=document.getElementById('saveBtn');if(b)b.classList.add('err');}
+  SAVING=false;if(ok)DIRTY=false;updateSaveBtn();
+  var b=document.getElementById('saveBtn');if(b&&!ok)b.classList.add('err');
  }
- if(CLOUD){
-  var ch=chunk(s);
-  if(!ch.length){cloudSetItemRetry(BK+"_n","0",2,function(err){cloudChunkN=0;finish(!err);});return;}
-  // пишем СНАЧАЛА данные по очереди, и только когда все чанки подтверждены — обновляем счётчик "_n".
-  // так при обрыве соединения половина сохранения не будет считаться валидной на чтении.
-  writeChunksSequential(ch,0,function(ok){
-   if(!ok){try{TG.showAlert&&TG.showAlert('Не удалось сохранить данные в облако. Проверьте соединение.');}catch(e){}finish(false);return;}
-   cloudSetItemRetry(BK+"_n",String(ch.length),2,function(err2){
-    if(err2){finish(false);return;}
-    // подчищаем чанки, оставшиеся от предыдущего, более длинного сохранения
-    for(var k=ch.length;k<cloudChunkN;k++)(function(k){TG.CloudStorage.removeItem(BK+"_"+k,function(){});})(k);
-    cloudChunkN=ch.length;
-    finish(true);
-    haptic('light');
-   });
+ if(!fbDb){finish(true);return;} // Firebase не настроен — данные остаются только локально в этом браузере
+ fbDb.collection('planners').doc(PLANNER_DOC_ID).set({data:s,updated:Date.now()})
+  .then(function(){finish(true);haptic('light');})
+  .catch(function(err){
+   console.error('Firestore write failed',err);
+   var msg='Не удалось сохранить данные в облако. Проверьте соединение.';
+   try{TG&&TG.showAlert?TG.showAlert(msg):alert(msg);}catch(e){alert(msg);}
+   finish(false);
   });
- }else{
-  try{localStorage.setItem(BK,s);finish(true);}
-  catch(e){console.error('localStorage write failed',e);try{TG&&TG.showAlert&&TG.showAlert('Не удалось сохранить: превышен лимит хранилища браузера.');}catch(e2){}finish(false);}
- }
 }
 // подстраховка: если пользователь закрывает/сворачивает приложение с несохранёнными
 // изменениями, всё равно пробуем сохранить, чтобы не потерять данные
 function flushSave(){if(DIRTY&&!SAVING)persist();}
-function loadRaw(key,cb){
- if(CLOUD){
-  TG.CloudStorage.getItem(key+"_n",function(err,val){
-   if(err){cb(null);return;}
-   var n=parseInt(val||"0",10);if(!n){cb(null);return;}
-   var keys=[];for(var i=0;i<n;i++)keys.push(key+"_"+i);
-   TG.CloudStorage.getItems(keys,function(e2,obj){if(e2||!obj){cb(null);return;}
-    var s="";for(var i=0;i<n;i++)s+=(obj[key+"_"+i]||"");
-    try{cloudChunkN=n;cb(JSON.parse(s));}catch(e){console.error('CloudStorage parse failed',e);cb(null);}});
-  });
- }else{
-  var s=null;try{s=localStorage.getItem(key);}catch(e){}
-  cb(s?JSON.parse(s):null);
- }
-}
-function load(cb){
- loadRaw(BK,function(data){
-  if(data){cb(data);return;}
-  // ничего не нашли под user-scoped ключом — пробуем старый общий ключ (миграция один раз)
-  loadRaw(BK_LEGACY,function(legacy){
-   if(legacy){cb(legacy,true);} // true = "нужно досохранить под новым ключом"
-   else cb(null);
-  });
+// Загрузка данных планера по конкретному docId (=hash PIN). cb(state|null, 'cloud'|'cache'|'notfound'|'error')
+function loadPlanner(docId,cb){
+ var cached=null;try{var c=localStorage.getItem('plannercache_'+docId);cached=c?JSON.parse(c):null;}catch(e){}
+ if(!fbDb){cb(cached,cached?'cache':'notfound');return;}
+ fbDb.collection('planners').doc(docId).get().then(function(snap){
+  if(snap.exists){
+   try{cb(JSON.parse(snap.data().data),'cloud');return;}catch(e){console.error('parse failed',e);}
+  }
+  cb(cached,cached?'cache':'notfound');
+ }).catch(function(err){
+  console.error('Firestore read failed',err);
+  cb(cached,cached?'cache':'error'); // офлайн/ошибка сети — пробуем локальный кэш как запасной вариант
  });
 }
 
@@ -920,11 +909,11 @@ function openSettings(){
  var html='<h3>Настройки</h3>'+
   '<div class="fld"><label>Название приложения</label><input id="f_app" value="'+esc(STATE.meta.app||"Планер выставок")+'"></div>'+
   '<div class="mbtns" style="margin-bottom:4px"><button class="cancel" id="sEx" style="flex:1">🎪 Выставки</button><button class="cancel" id="sFeat" style="flex:1">🧩 Возможности</button></div>'+
-  '<div class="mbtns" style="margin-bottom:4px"><button class="cancel" id="sTabs" style="flex:1">Разделы (вкладки)</button><button class="cancel" id="sPin" style="flex:1">'+(STATE.meta.pin?'🔒 PIN':'🔒 Задать PIN')+'</button></div>'+
+  '<div class="mbtns" style="margin-bottom:4px"><button class="cancel" id="sTabs" style="flex:1">Разделы (вкладки)</button><button class="cancel" id="sPin" style="flex:1">🔒 Сменить PIN</button></div>'+
   '<div class="mbtns"><button class="cancel" id="xImp">Импорт Excel</button><button class="cancel" id="xExp">Экспорт Excel</button></div>'+
   '<div class="mbtns" style="margin-top:8px"><button class="cancel" id="jExp">Экспорт JSON</button><button class="cancel" id="jImp">Импорт JSON</button></div>'+
   '<div class="mbtns" style="margin-top:8px"><button class="del eq" id="sReset">Сброс к демо-данным</button><button class="save eq" id="sSave">Готово</button></div>'+
-  '<div class="note" style="margin-top:12px">Excel экспортирует текущую выставку/год. Данные хранятся '+(CLOUD?"в облаке Telegram":"в этом браузере")+'.</div>';
+  '<div class="note" style="margin-top:12px">Excel экспортирует текущую выставку/год. Данные хранятся '+(fbDb?"в облаке (Firebase) — доступны на любом устройстве по PIN":"только в этом браузере — заполните FIREBASE_CONFIG в коде для синхронизации")+'.</div>';
  modal.innerHTML=html;ov.classList.add("on");
  document.getElementById("sEx").onclick=openExConfig;
  document.getElementById("sFeat").onclick=openFeatConfig;
@@ -1073,22 +1062,68 @@ function openManagersEditor(){
 }
 
 
-/* ================= PIN ================= */
+/* ================= PIN / вход в облако =================
+   PIN теперь — это не просто локальный экран блокировки, а КЛЮЧ к вашим данным: документ в
+   Firestore называется SHA-256(PIN). Введя один и тот же PIN на любом устройстве, вы попадаете
+   в один и тот же планер. Поэтому: один PIN = один планер; если хотите начать новый — введите
+   PIN, которого раньше не было, и подтвердите создание. */
+var PIN_LEN=6;
 var lock=document.getElementById("lock"),dotsEl=document.getElementById("dots"),lockSub=document.getElementById("lockSub");
-var pinBuf="",pinMode="check",pinTmp="";
-function updDots(){var f=pinBuf.length;dotsEl.innerHTML="";for(var i=0;i<4;i++){var el=document.createElement("i");if(i<f)el.className="f";dotsEl.appendChild(el);}}
-function showLock(){pinBuf="";pinMode="check";lockSub.textContent="Введите PIN";updDots();lock.classList.add("on");}
-function hideLock(){lock.classList.remove("on");handleStartParam();}
-function pinPress(k){if(k==="del"){pinBuf=pinBuf.slice(0,-1);updDots();return;}if(pinBuf.length>=4)return;pinBuf+=k;updDots();
- if(pinBuf.length===4)setTimeout(function(){
-  if(pinMode==="check"){if(pinHash(pinBuf)===STATE.meta.pin){hideLock();}else{dotsEl.classList.add("err");lockSub.textContent="Неверный PIN";setTimeout(function(){dotsEl.classList.remove("err");pinBuf="";updDots();lockSub.textContent="Введите PIN";},500);}}
-  else if(pinMode==="set1"){pinTmp=pinBuf;pinBuf="";updDots();pinMode="set2";lockSub.textContent="Повторите PIN";}
-  else if(pinMode==="set2"){if(pinBuf===pinTmp){STATE.meta.pin=pinHash(pinBuf);persist();hideLock();}else{dotsEl.classList.add("err");lockSub.textContent="Не совпало, заново";setTimeout(function(){dotsEl.classList.remove("err");pinBuf="";updDots();pinMode="set1";lockSub.textContent="Задайте новый PIN";},600);}}
- },120);}
+var pinBuf="",pinMode="unlock",pinTmp="",pinPurpose="boot";
+function updDots(){var f=pinBuf.length;dotsEl.innerHTML="";for(var i=0;i<PIN_LEN;i++){var el=document.createElement("i");if(i<f)el.className="f";dotsEl.appendChild(el);}}
+function showLock(purpose){pinPurpose=purpose||"boot";pinBuf="";pinMode="unlock";lockSub.textContent="Введите PIN ("+PIN_LEN+" цифр)";updDots();lock.classList.add("on");}
+function hideLock(){lock.classList.remove("on");if(pinPurpose==="boot")handleStartParam();}
+function beginCreate(){pinMode="set1";pinBuf="";pinTmp="";lockSub.textContent="Придумайте новый PIN ("+PIN_LEN+" цифр)";updDots();lock.classList.add("on");}
+function pinPress(k){
+ if(pinMode==="busy")return; // идёт сетевой запрос — игнорируем ввод
+ if(k==="del"){pinBuf=pinBuf.slice(0,-1);updDots();return;}
+ if(pinBuf.length>=PIN_LEN)return;
+ pinBuf+=k;updDots();
+ if(pinBuf.length<PIN_LEN)return;
+ if(pinMode==="unlock"){
+  var entered=pinBuf;pinMode="busy";lockSub.textContent="Проверка…";
+  sha256hex(entered).then(function(docId){
+   loadPlanner(docId,function(saved,source){
+    if(source==="cloud"||source==="cache"){
+     STATE=shape(saved);PLANNER_DOC_ID=docId;
+     try{localStorage.setItem(localCacheKey(),JSON.stringify(STATE));}catch(e){}
+     renderAll();updateSaveBtn();
+     if(source==="cache"){lockSub.textContent=fbDb?"Офлайн: локальные данные":"Готово";setTimeout(hideLock,700);}
+     else hideLock();
+    }else if(source==="error"){
+     pinMode="unlock";pinBuf="";updDots();lockSub.textContent="Нет соединения. Попробуйте ещё раз";
+    }else{ // notfound — либо опечатка, либо действительно новый PIN
+     pinMode="unlock";
+     if(confirm("Данных с таким PIN не найдено. Создать с ним новый пустой планер?")){
+      STATE=shape(genSeed());PLANNER_DOC_ID=docId;DIRTY=true;persist();renderAll();hideLock();
+     }else{pinBuf="";updDots();lockSub.textContent="Введите PIN ("+PIN_LEN+" цифр)";}
+    }
+   });
+  });
+ }else if(pinMode==="set1"){
+  pinTmp=pinBuf;pinBuf="";updDots();pinMode="set2";lockSub.textContent="Повторите новый PIN";
+ }else if(pinMode==="set2"){
+  if(pinBuf!==pinTmp){
+   dotsEl.classList.add("err");lockSub.textContent="Не совпало, заново";
+   setTimeout(function(){dotsEl.classList.remove("err");pinBuf="";pinMode="set1";lockSub.textContent="Придумайте новый PIN ("+PIN_LEN+" цифр)";updDots();},700);
+   return;
+  }
+  var newPin=pinBuf;pinMode="busy";lockSub.textContent="Сохранение…";
+  sha256hex(newPin).then(function(newDocId){
+   if(pinPurpose==="change"){
+    var oldId=PLANNER_DOC_ID;PLANNER_DOC_ID=newDocId;DIRTY=true;persist();
+    if(fbDb&&oldId&&oldId!==newDocId)fbDb.collection('planners').doc(oldId).delete().catch(function(){});
+    hideLock();
+   }else{
+    STATE=shape(genSeed());PLANNER_DOC_ID=newDocId;DIRTY=true;persist();renderAll();hideLock();
+   }
+  });
+ }
+}
 document.getElementById("pad").addEventListener("click",function(e){var b=e.target.closest("button");if(b&&b.dataset.k)pinPress(b.dataset.k);});
 document.addEventListener("keydown",function(e){if(!lock.classList.contains("on"))return;if(e.key>="0"&&e.key<="9")pinPress(e.key);else if(e.key==="Backspace")pinPress("del");});
-document.getElementById("lockForgot").onclick=function(){if(confirm("Сбросить PIN можно только полным сбросом данных к демо. Продолжить?")){STATE=shape(genSeed());persist();hideLock();renderAll();}};
-function openPinSet(){closeForm();pinMode="set1";pinBuf="";pinTmp="";lockSub.textContent="Задайте новый PIN";updDots();lock.classList.add("on");}
+document.getElementById("lockForgot").onclick=function(){if(confirm("Если PIN забыт, доступ к прежним данным восстановить нельзя — это ваш единственный ключ к ним. Создать новый пустой планер с новым PIN?")){pinPurpose="boot";beginCreate();}};
+function openPinSet(){closeForm();pinPurpose="change";beginCreate();}
 
 /* ================= Excel ================= */
 function exportExcel(){try{
@@ -1171,13 +1206,7 @@ function handleStartParam(){
  else if(p==='settings'){switchTab('obz');openSettings();}
  else if(p.indexOf('tab_')===0){switchTab(p.slice(4));}
 }
-load(function(saved,needsMigrateSave){
- STATE=shape(saved||genSeed());
- renderAll();
- if(needsMigrateSave)persist(); // одноразовый перенос данных со старого общего ключа на новый, привязанный к пользователю
- if(STATE.meta.pin)showLock();
- else handleStartParam();
-});
+showLock('boot'); // сразу спрашиваем PIN — до его ввода мы не знаем, какой документ (планер) грузить
 
 </script>
 </body>
