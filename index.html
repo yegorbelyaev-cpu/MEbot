@@ -238,12 +238,24 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 var TG=(window.Telegram&&window.Telegram.WebApp)?window.Telegram.WebApp:null;
 var CLOUD=!!(TG&&TG.CloudStorage&&TG.isVersionAtLeast&&TG.isVersionAtLeast('6.9'));
 if(TG){try{TG.ready();TG.expand();TG.setHeaderColor&&TG.setHeaderColor('secondary_bg_color');}catch(e){}}
-var BK="mxv3", STATE=null, saveTimer=null;
+/* user_id используется только чтобы разные люди на ОДНОМ устройстве/браузере (когда CloudStorage
+   недоступен и всё падает на localStorage) не затирали данные друг друга. CloudStorage сам по себе
+   уже изолирован Telegram по паре (бот, пользователь) — это НЕ инструмент разделения общих данных
+   планера между членами команды: они по-прежнему работают с одним и тем же datasetом внутри
+   CloudStorage их аккаунта. Если нужен реальный shared-датасет на всю команду — см. рекомендации
+   по архитектуре (нужен серверный бэкенд, а не Cloud/localStorage). */
+function getUserId(){try{return (TG&&TG.initDataUnsafe&&TG.initDataUnsafe.user&&TG.initDataUnsafe.user.id)?String(TG.initDataUnsafe.user.id):null;}catch(e){return null;}}
+var UID=getUserId();
+var BK_LEGACY="mxv3";
+var BK=UID?("mxv3_u"+UID):"mxv3_anon";
+var STATE=null, saveTimer=null;
 var THISYEAR=new Date().getFullYear();
 
 var SEED_PRO_STEPS=["ТЗ","Отправлено","Нарисовано","Посчитано","Подписано","Баннеры","Розетки"];
-var SEED_UCH_STEPS=["Место","Подпись","ЭДО","ЛК","Аванс","100%","Приложение 1","Приложение 2","Приложение 3","Приложение 4","Приложение 5"];
-var OLD_UCH_STEPS=["Место","Подпись","ЭДО","ЛК","Аванс","100%","Оклейка","Бейджи"];
+var NEW_UCH_STEPS=["Выбор места","Договор","Приложение 1","Приложение 2","Приложение 3","Приложение 4","Приложение 5","Подпись","ЭДО","ЛК","Аванс","100%","Оклейка","Бейджи"];
+var SEED_UCH_STEPS=NEW_UCH_STEPS; // текущий канонический порядок/состав этапов участников
+var OLD_UCH_STEPS=["Место","Подпись","ЭДО","ЛК","Аванс","100%","Оклейка","Бейджи"]; // самая старая версия набора (для истории/тестов миграции)
+var UCH_RENAME={"Место":"Выбор места"}; // переименования между версиями (старая метка -> новая)
 var PRO_STEPS=SEED_PRO_STEPS.slice(), UCH_STEPS=SEED_UCH_STEPS.slice();
 var EX_DEFAULTS=[{id:'metallexpo',name:'Металл-Экспо',color:'#2f6f9e'},{id:'metallokon',name:'Металлоконструкции',color:'#d98a2b'},{id:'litmash',name:'Литмаш',color:'#c0563f'}];
 var DEFAULT_MGRS=["Иванова","Петров","Сидорова","Кузнецов"];
@@ -276,7 +288,7 @@ function genSeed(){
    dash:['ring','kpis','econ','funnelU','funnelP','builders'],
    kpis:['uchCount','soglas','soglasS','proCount','full100'],
    feat:{}, sort:{}, flt:{}, search:{}, tabCfg:{},
-   ana:{metric:'uch',chart:'line'}, trend:{}, total:null
+   ana:{metric:'uch',chart:'line',exs:[EX_DEFAULTS[0].id]}, trend:{}, total:null
   },
   data:data
  };
@@ -284,15 +296,60 @@ function genSeed(){
 
 /* ---------- storage ---------- */
 function chunk(s){var a=[];for(var i=0;i<s.length;i+=3800)a.push(s.slice(i,i+3800));return a;}
-function persist(){var s=JSON.stringify(STATE);
- if(CLOUD){var ch=chunk(s);TG.CloudStorage.setItem(BK+"_n",String(ch.length),function(){ch.forEach(function(c,i){TG.CloudStorage.setItem(BK+"_"+i,c,function(){});});});}
- else{try{localStorage.setItem(BK,s);}catch(e){}}}
+var cloudChunkN=0; // сколько чанков было записано в облако в прошлый раз — нужно, чтобы подчистить "хвост"
+function persist(){
+ var s=JSON.stringify(STATE);
+ if(CLOUD){
+  var ch=chunk(s);
+  // пишем СНАЧАЛА данные, и только когда все чанки подтверждены — обновляем счётчик "_n".
+  // так при обрыве соединения половина сохранения не будет считаться валидной на чтении.
+  var done=0,failed=false;
+  ch.forEach(function(c,i){
+   TG.CloudStorage.setItem(BK+"_"+i,c,function(err){
+    if(err){failed=true;console.error('CloudStorage write failed',err);}
+    done++;
+    if(done===ch.length){
+     if(failed){try{TG.showAlert&&TG.showAlert('Не удалось сохранить данные в облако. Проверьте соединение.');}catch(e){}return;}
+     TG.CloudStorage.setItem(BK+"_n",String(ch.length),function(err2){
+      if(err2){console.error('CloudStorage write failed (_n)',err2);return;}
+      // подчищаем чанки, оставшиеся от предыдущего, более длинного сохранения
+      for(var k=ch.length;k<cloudChunkN;k++)TG.CloudStorage.removeItem(BK+"_"+k,function(){});
+      cloudChunkN=ch.length;
+     });
+    }
+   });
+  });
+  if(!ch.length){TG.CloudStorage.setItem(BK+"_n","0",function(){cloudChunkN=0;});}
+ }else{
+  try{localStorage.setItem(BK,s);}catch(e){console.error('localStorage write failed',e);try{TG&&TG.showAlert&&TG.showAlert('Не удалось сохранить: превышен лимит хранилища браузера.');}catch(e2){}}
+ }
+}
 function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(persist,400);}
+function loadRaw(key,cb){
+ if(CLOUD){
+  TG.CloudStorage.getItem(key+"_n",function(err,val){
+   if(err){cb(null);return;}
+   var n=parseInt(val||"0",10);if(!n){cb(null);return;}
+   var keys=[];for(var i=0;i<n;i++)keys.push(key+"_"+i);
+   TG.CloudStorage.getItems(keys,function(e2,obj){if(e2||!obj){cb(null);return;}
+    var s="";for(var i=0;i<n;i++)s+=(obj[key+"_"+i]||"");
+    try{cloudChunkN=n;cb(JSON.parse(s));}catch(e){console.error('CloudStorage parse failed',e);cb(null);}});
+  });
+ }else{
+  var s=null;try{s=localStorage.getItem(key);}catch(e){}
+  cb(s?JSON.parse(s):null);
+ }
+}
 function load(cb){
- if(CLOUD){TG.CloudStorage.getItem(BK+"_n",function(err,val){var n=parseInt(val||"0",10);if(!n){cb(null);return;}
-   var keys=[];for(var i=0;i<n;i++)keys.push(BK+"_"+i);
-   TG.CloudStorage.getItems(keys,function(e2,obj){if(e2||!obj){cb(null);return;}var s="";for(var i=0;i<n;i++)s+=(obj[BK+"_"+i]||"");try{cb(JSON.parse(s));}catch(e){cb(null);}});});}
- else{var s=null;try{s=localStorage.getItem(BK);}catch(e){}cb(s?JSON.parse(s):null);}}
+ loadRaw(BK,function(data){
+  if(data){cb(data);return;}
+  // ничего не нашли под user-scoped ключом — пробуем старый общий ключ (миграция один раз)
+  loadRaw(BK_LEGACY,function(legacy){
+   if(legacy){cb(legacy,true);} // true = "нужно досохранить под новым ключом"
+   else cb(null);
+  });
+ });
+}
 
 /* ---------- shape / migrations ---------- */
 function sameArr(a,b){if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return false;for(var i=0;i<a.length;i++)if(a[i]!==b[i])return false;return true;}
@@ -303,14 +360,21 @@ function shape(st){
  if(!m.curEx||!exById(m.curEx,m))m.curEx=m.exhibitions[0].id;
  m.curYear=m.curYear||THISYEAR;
  m.proSteps=m.proSteps||SEED_PRO_STEPS.slice(); m.uchSteps=m.uchSteps||SEED_UCH_STEPS.slice();
- // миграция: старый набор этапов участников -> новый (с переиндексацией отметок)
- if(sameArr(m.uchSteps,OLD_UCH_STEPS)){
-  var map=SEED_UCH_STEPS.map(function(l){return OLD_UCH_STEPS.indexOf(l);});
+ // миграция набора/порядка этапов участников: переносим отметки по НАЗВАНИЮ этапа (с учётом
+ // переименований в UCH_RENAME), а не по индексу — иначе при простой перестановке массива
+ // у всех существующих участников отметки "уедут" не на те этапы.
+ if(!sameArr(m.uchSteps,NEW_UCH_STEPS)){
+  var oldSteps=m.uchSteps.slice();
+  var renamedOld=oldSteps.map(function(l){return UCH_RENAME[l]||l;});
+  var idxMap=NEW_UCH_STEPS.map(function(l){return renamedOld.indexOf(l);});
   st.data=st.data||{};
-  for(var mi in st.data){for(var my in st.data[mi]){var mb=st.data[mi][my];(mb.uch||[]).forEach(function(r){var old=Array.isArray(r.st)?r.st:[];r.st=map.map(function(oi){return (oi>=0&&old[oi]!=null)?old[oi]:0;});});}}
+  for(var mi in st.data){for(var my in st.data[mi]){var mb=st.data[mi][my];(mb.uch||[]).forEach(function(r){
+   var old=Array.isArray(r.st)?r.st:[];
+   r.st=idxMap.map(function(oi){return (oi>=0&&old[oi]!=null)?old[oi]:0;});
+  });}}
   var oldDue=(m.uchDue||[]).slice();
-  m.uchDue=SEED_UCH_STEPS.map(function(l){var oi=OLD_UCH_STEPS.indexOf(l);return (oi>=0&&oldDue[oi])?oldDue[oi]:'';});
-  m.uchSteps=SEED_UCH_STEPS.slice();
+  m.uchDue=idxMap.map(function(oi){return (oi>=0&&oldDue[oi])?oldDue[oi]:'';});
+  m.uchSteps=NEW_UCH_STEPS.slice();
  }
  PRO_STEPS=m.proSteps; UCH_STEPS=m.uchSteps;
  m.proDue=m.proDue||[]; m.uchDue=m.uchDue||[];
@@ -322,6 +386,9 @@ function shape(st){
  m.feat=m.feat||{}; if('mass' in m.feat)delete m.feat.mass;
  m.sort=m.sort||{}; m.flt=m.flt||{}; m.search=m.search||{};
  m.tabCfg=m.tabCfg||{}; m.ana=m.ana||{}; if(!m.ana.metric)m.ana.metric='uch'; if(!m.ana.chart)m.ana.chart='line'; if('pie' in m.ana)delete m.ana.pie;
+ if(!Array.isArray(m.ana.exs)||!m.ana.exs.length)m.ana.exs=[m.curEx];
+ m.ana.exs=m.ana.exs.filter(function(id){return !!exById(id,m);});
+ if(!m.ana.exs.length)m.ana.exs=[m.curEx];
  m.trend=m.trend||{};
  if(m.pin===undefined)m.pin=pinHash('1717'); if(m.total===undefined)m.total=null;
  st.data=st.data||{};
@@ -675,33 +742,61 @@ function multiLine(years,series,fmt){
  var g='';[0,.5,1].forEach(function(f){var y=Y(mx*f);g+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(w-padL)+'" y2="'+y.toFixed(1)+'" stroke="var(--line)"/>';});
  var lines=series.map(function(s){var pts=s.data.map(function(v,i){return v==null?null:(X(i).toFixed(1)+','+Y(v).toFixed(1));}).filter(Boolean).join(' ');return '<polyline points="'+pts+'" fill="none" stroke="'+s.color+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';}).join('');
  var xl=years.map(function(y,i){return '<text x="'+X(i).toFixed(1)+'" y="'+(hh-4)+'" font-size="9" text-anchor="middle" fill="var(--mut)">'+y+'</text>';}).join('');
- return '<svg width="100%" viewBox="0 0 '+w+' '+hh+'" style="max-width:'+w+'px">'+g+lines+xl+'</svg>';}
+ return '<svg width="100%" viewBox="0 0 '+w+' '+hh+'" style="max-width:'+w+'px">'+g+lines+xl+'</svg>'+seriesLegend(series);}
+function seriesLegend(series){if(series.length<2)return '';return '<div class="leg" style="margin-top:6px">'+series.map(function(s){return '<div><i style="background:'+s.color+'"></i>'+esc(s.name)+'</div>';}).join('')+'</div>';}
 function barChart(items,fmt){var w=320,hh=150,padB=18,n=items.length;var mx=Math.max.apply(null,items.map(function(x){return x.v;}).concat([1]));var bw=(w/n)*0.6,gap=(w/n)*0.4;
  var bars=items.map(function(x,i){var bh=(x.v/mx)*(hh-padB-14);var bx=i*(w/n)+gap/2;var by=(hh-padB)-bh;return '<rect x="'+bx.toFixed(1)+'" y="'+by.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="4" fill="'+x.color+'"/><text x="'+(bx+bw/2).toFixed(1)+'" y="'+(by-3).toFixed(1)+'" font-size="9" text-anchor="middle" fill="var(--ink)">'+fmt(x.v)+'</text><text x="'+(bx+bw/2).toFixed(1)+'" y="'+(hh-4)+'" font-size="9" text-anchor="middle" fill="var(--mut)">'+esc(x.label.length>10?x.label.slice(0,9)+'…':x.label)+'</text>';}).join('');
  return '<svg width="100%" viewBox="0 0 '+w+' '+hh+'" style="max-width:'+w+'px">'+bars+'</svg>';}
+/* группированные столбцы: несколько выставок бок о бок для каждого года */
+function groupedBarChart(years,series,fmt){
+ var w=Math.max(320,years.length*series.length*26),hh=160,padB=26,n=years.length,g=series.length;
+ var vals=[];series.forEach(function(s){s.data.forEach(function(v){if(v!=null)vals.push(v);});});
+ var mx=Math.max.apply(null,vals.concat([1]));
+ var groupW=w/n,barW=(groupW*0.72)/g,gap=groupW*0.14;
+ var bars='';
+ years.forEach(function(y,yi){
+  series.forEach(function(s,si){
+   var v=s.data[yi]||0;var bh=(v/mx)*(hh-padB-16);var bx=yi*groupW+gap+si*barW;var by=(hh-padB)-bh;
+   bars+='<rect x="'+bx.toFixed(1)+'" y="'+by.toFixed(1)+'" width="'+(barW*0.85).toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="3" fill="'+s.color+'"/>';
+  });
+  bars+='<text x="'+(yi*groupW+groupW/2).toFixed(1)+'" y="'+(hh-6)+'" font-size="9" text-anchor="middle" fill="var(--mut)">'+y+'</text>';
+ });
+ return '<svg width="100%" viewBox="0 0 '+w+' '+hh+'" style="max-width:'+w+'px">'+bars+'</svg>'+seriesLegend(series);}
 function pieChart(map){var keys=Object.keys(map).filter(function(k){return map[k]>0;});if(!keys.length)return '<div class="muted">нет данных</div>';var tt=keys.reduce(function(a,k){return a+map[k];},0);var pal=['#2f6f9e','#d98a2b','#c0563f','#3fa978','#7a5ea8','#5b7fc7','#b7793f'];var R=45,C=2*Math.PI*R,off=0,segs='';keys.forEach(function(k,i){var len=(map[k]/tt)*C,cl=pal[i%pal.length];segs+='<circle cx="60" cy="60" r="'+R+'" fill="none" stroke="'+cl+'" stroke-width="26" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 60 60)"/>';off+=len;});var leg=keys.map(function(k,i){return '<div><i style="background:'+pal[i%pal.length]+'"></i>'+esc(k)+' — '+map[k]+' ('+Math.round(map[k]/tt*100)+'%)</div>';}).join('');return '<div class="donutwrap"><svg width="120" height="120" viewBox="0 0 120 120">'+segs+'</svg><div class="leg">'+leg+'</div></div>';}
 function renderAna(){
  var a=STATE.meta.ana;var M=METRICS[a.metric]||METRICS.uch;
- var ex=curEx();var yy=yearsOf(ex.id);
- var h='<div class="addbar"><span class="muted">'+esc(ex.name)+' · динамика по годам</span><button class="cfgbtn" data-tabcfg="ana">⚙</button></div>';
- if(!yy.length){h+='<div class="center">Нет данных по выставке.</div>';document.getElementById('ana').innerHTML=h;return;}
+ var exs=a.exs.map(function(id){return exById(id);}).filter(Boolean);
+ if(!exs.length){exs=[curEx()];a.exs=[curEx().id];}
+ var yy=[];exs.forEach(function(ex){yearsOf(ex.id).forEach(function(y){if(yy.indexOf(y)<0)yy.push(y);});});yy.sort(function(x,y){return x-y;});
+ var picker='<div class="exbar" style="margin:0 0 10px">'+STATE.meta.exhibitions.map(function(ex){var on=a.exs.indexOf(ex.id)>=0;
+   return '<button class="exchip'+(on?' on':'')+'" data-anaex="'+ex.id+'" style="'+(on?'background:'+ex.color+';border-color:'+ex.color:'border-color:'+hexA(ex.color,.5)+';color:'+ex.color)+'">'+esc(ex.name)+'</button>';}).join('')+'</div>';
+ var h='<div class="addbar"><span class="muted">'+(exs.length>1?exs.length+' выставки · сравнение':exs[0].name)+' · динамика по годам</span><button class="cfgbtn" data-tabcfg="ana">⚙</button></div>'+picker;
+ if(!yy.length){h+='<div class="center">Нет данных по выбранным выставкам.</div>';document.getElementById('ana').innerHTML=h;return;}
  var chart='';
+ var series=exs.map(function(ex){return {color:ex.color,name:ex.name,data:yy.map(function(y){return M[1](statsFor(ex.id,y));})};});
  if(a.chart==='line'){
-  var series=[{color:ex.color,name:ex.name,data:yy.map(function(y){return M[1](statsFor(ex.id,y));})}];
-  chart='<div class="block"><h2>'+M[0]+' · '+esc(ex.name)+'</h2>'+multiLine(yy,series,M[2])+'</div>';
+  chart='<div class="block"><h2>'+M[0]+'</h2>'+multiLine(yy,series,M[2])+'</div>';
  }else if(a.chart==='bar'){
-  var items=yy.map(function(y){return {label:String(y),v:M[1](statsFor(ex.id,y)),color:ex.color};});
-  chart='<div class="block"><h2>'+M[0]+' · '+esc(ex.name)+' по годам</h2>'+barChart(items,M[2])+'</div>';
+  chart=exs.length>1?
+   '<div class="block"><h2>'+M[0]+' по годам</h2>'+groupedBarChart(yy,series,M[2])+'</div>':
+   '<div class="block"><h2>'+M[0]+' · '+esc(exs[0].name)+' по годам</h2>'+barChart(yy.map(function(y,i){return {label:String(y),v:series[0].data[i],color:exs[0].color};}),M[2])+'</div>';
  }else{
-  var s0=statsFor(ex.id,STATE.meta.curYear);
-  chart='<div class="block"><h2>Новые и повторные · '+esc(ex.name)+' '+STATE.meta.curYear+'</h2>'+pieChart({'Новые':s0.nw,'Повторные':s0.rp})+'</div>';
+  var ex0=exs[0],s0=statsFor(ex0.id,STATE.meta.curYear);
+  chart='<div class="block"><h2>Новые и повторные · '+esc(ex0.name)+' '+STATE.meta.curYear+(exs.length>1?' (только первая из выбранных)':'')+'</h2>'+pieChart({'Новые':s0.nw,'Повторные':s0.rp})+'</div>';
  }
  h+=chart;
- // delta table for current exhibition
- var rowsHtml='';yy.forEach(function(y,i){var s=statsFor(ex.id,y);var prev=i>0?statsFor(ex.id,yy[i-1]):null;
-  function dl(cur,pr){if(pr==null)return '';var d=cur-pr;var pct=pr?Math.round(d/pr*100):0;var cls=d>=0?'up':'down';return '<span class="delta '+cls+'"> '+(d>=0?'▲':'▼')+' '+Math.abs(pct)+'%</span>';}
-  rowsHtml+='<tr><td>'+y+'</td><td>'+s.uch+dl(s.uch,prev&&prev.uch)+'</td><td>'+rub.format(s.area)+dl(s.area,prev&&prev.area)+'</td><td>'+money(s.rev)+dl(s.rev,prev&&prev.rev)+'</td><td>'+money(s.paid)+dl(s.paid,prev&&prev.paid)+'</td><td>'+money(s.debt)+dl(s.debt,prev&&prev.debt)+'</td><td>'+money(s.avg)+'</td><td>'+s.nw+'/'+s.rp+'</td></tr>';});
- h+='<div class="block"><h2>Динамика · '+esc(ex.name)+' (дельта к прошлому году)</h2><div class="mtxwrap"><table class="dtable"><thead><tr><th>Год</th><th>Участники</th><th>Площадь</th><th>Выручка</th><th>Оплачено</th><th>Долг</th><th>Ср. чек</th><th>Нов/Повт</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div></div>';
+ if(exs.length===1){
+  // дельта к прошлому году — имеет смысл только для одной выставки
+  var ex=exs[0];
+  var rowsHtml='';yy.forEach(function(y,i){var s=statsFor(ex.id,y);var prev=i>0?statsFor(ex.id,yy[i-1]):null;
+   function dl(cur,pr){if(pr==null)return '';var d=cur-pr;var pct=pr?Math.round(d/pr*100):0;var cls=d>=0?'up':'down';return '<span class="delta '+cls+'"> '+(d>=0?'▲':'▼')+' '+Math.abs(pct)+'%</span>';}
+   rowsHtml+='<tr><td>'+y+'</td><td>'+s.uch+dl(s.uch,prev&&prev.uch)+'</td><td>'+rub.format(s.area)+dl(s.area,prev&&prev.area)+'</td><td>'+money(s.rev)+dl(s.rev,prev&&prev.rev)+'</td><td>'+money(s.paid)+dl(s.paid,prev&&prev.paid)+'</td><td>'+money(s.debt)+dl(s.debt,prev&&prev.debt)+'</td><td>'+money(s.avg)+'</td><td>'+s.nw+'/'+s.rp+'</td></tr>';});
+  h+='<div class="block"><h2>Динамика · '+esc(ex.name)+' (дельта к прошлому году)</h2><div class="mtxwrap"><table class="dtable"><thead><tr><th>Год</th><th>Участники</th><th>Площадь</th><th>Выручка</th><th>Оплачено</th><th>Долг</th><th>Ср. чек</th><th>Нов/Повт</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div></div>';
+ }else{
+  // сравнительная таблица: год × выставка, значение выбранного показателя
+  var cmpRows='';yy.forEach(function(y,i){cmpRows+='<tr><td>'+y+'</td>'+exs.map(function(ex,ei){return '<td>'+M[2](series[ei].data[i])+'</td>';}).join('')+'</tr>';});
+  h+='<div class="block"><h2>Сравнение · '+esc(M[0])+'</h2><div class="mtxwrap"><table class="dtable"><thead><tr><th>Год</th>'+exs.map(function(ex){return '<th>'+esc(ex.name)+'</th>';}).join('')+'</tr></thead><tbody>'+cmpRows+'</tbody></table></div></div>';
+ }
  document.getElementById('ana').innerHTML=h;
 }
 
@@ -938,7 +1033,7 @@ var lock=document.getElementById("lock"),dotsEl=document.getElementById("dots"),
 var pinBuf="",pinMode="check",pinTmp="";
 function updDots(){var f=pinBuf.length;dotsEl.innerHTML="";for(var i=0;i<4;i++){var el=document.createElement("i");if(i<f)el.className="f";dotsEl.appendChild(el);}}
 function showLock(){pinBuf="";pinMode="check";lockSub.textContent="Введите PIN";updDots();lock.classList.add("on");}
-function hideLock(){lock.classList.remove("on");}
+function hideLock(){lock.classList.remove("on");handleStartParam();}
 function pinPress(k){if(k==="del"){pinBuf=pinBuf.slice(0,-1);updDots();return;}if(pinBuf.length>=4)return;pinBuf+=k;updDots();
  if(pinBuf.length===4)setTimeout(function(){
   if(pinMode==="check"){if(pinHash(pinBuf)===STATE.meta.pin){hideLock();}else{dotsEl.classList.add("err");lockSub.textContent="Неверный PIN";setTimeout(function(){dotsEl.classList.remove("err");pinBuf="";updDots();lockSub.textContent="Введите PIN";},500);}}
@@ -996,6 +1091,9 @@ document.body.addEventListener("click",function(e){
  if((el=t.closest("[data-go]"))){var go=el.dataset.go;if(el.dataset.bld){VF={type:'ste',label:'Застройщик: '+el.dataset.bld,fn:(function(b){return function(r){return r.builder===b;};})(el.dataset.bld)};go='ste';}
   else if(el.dataset.step){var stp=el.dataset.step;VF={type:go,label:'Не сделано: '+stp,fn:(function(s,tp){return function(r){var steps=tp==='uch'?UCH_STEPS:PRO_STEPS;var ix=steps.indexOf(s);return ix>=0&&r.st[ix]!==1;};})(stp,go)};}
   switchTab(go);return;}
+ if((el=t.closest("[data-anaex]"))){var aid=el.dataset.anaex;var exs=STATE.meta.ana.exs;var ix=exs.indexOf(aid);
+  if(ix>=0){if(exs.length>1)exs.splice(ix,1);}else exs.push(aid);
+  saveSoon();renderAna();haptic('light');return;}
  if((el=t.closest("[data-fltopen]"))){openFilterModal(el.dataset.fltopen);return;}
  if((el=t.closest("[data-tabcfg]"))){openTabConfig(el.dataset.tabcfg);return;}
  if((el=t.closest("[data-dashcfg]"))){openDashConfig();return;}
@@ -1015,11 +1113,25 @@ document.body.addEventListener("click",function(e){var b=e.target.closest(".sort
 var qTimer=null;
 document.body.addEventListener("input",function(e){var t=e.target;if(t.classList.contains("qsearch")){var tp=t.dataset.type;STATE.meta.search[tp]=t.value;clearTimeout(qTimer);qTimer=setTimeout(function(){saveSoon();var pos=t.selectionStart;rerender(tp);var ni=document.querySelector('.qsearch[data-type="'+tp+'"]');if(ni){ni.focus();try{ni.setSelectionRange(pos,pos);}catch(e){}}},220);}});
 
+function flushSave(){if(saveTimer){clearTimeout(saveTimer);saveTimer=null;persist();}}
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')flushSave();});
+window.addEventListener('pagehide',flushSave);
+
 /* ================= init ================= */
-load(function(saved){
+function handleStartParam(){
+ var p='';try{p=(TG&&TG.initDataUnsafe&&TG.initDataUnsafe.start_param)||'';}catch(e){}
+ if(!p)return;
+ if(p==='export'){switchTab('obz');openSettings();setTimeout(function(){var b=document.getElementById('xExp');if(b)b.click();},50);}
+ else if(p==='import'){switchTab('obz');openSettings();setTimeout(function(){var b=document.getElementById('xImp');if(b)b.click();},50);}
+ else if(p==='settings'){switchTab('obz');openSettings();}
+ else if(p.indexOf('tab_')===0){switchTab(p.slice(4));}
+}
+load(function(saved,needsMigrateSave){
  STATE=shape(saved||genSeed());
  renderAll();
+ if(needsMigrateSave)persist(); // одноразовый перенос данных со старого общего ключа на новый, привязанный к пользователю
  if(STATE.meta.pin)showLock();
+ else handleStartParam();
 });
 
 </script>
